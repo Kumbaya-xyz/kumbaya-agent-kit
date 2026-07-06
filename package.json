@@ -1,5 +1,5 @@
 {
-  "name": "kumbaya-mcp",
+  "name": "@kumbaya_xyz/kumbaya-mcp",
   "version": "0.1.0",
   "description": "Model Context Protocol server for the Kumbaya platform on MegaETH: DEX (quotes, pools, tokens, stats), launchpad, social, and search.",
   "type": "module",
@@ -17,7 +17,8 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "refresh-spec": "node scripts/refresh-spec.mjs",
-    "audit": "tsx src/audit.ts"
+    "audit": "tsx src/audit.ts",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "mcp",
@@ -39,5 +40,17 @@
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
+  },
+  "author": "Kumbaya",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kumbaya-xyz/kumbaya-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kumbaya-xyz/kumbaya-mcp/issues"
+  },
+  "homepage": "https://github.com/kumbaya-xyz/kumbaya-mcp#readme",
+  "publishConfig": {
+    "access": "public"
   }
 }
