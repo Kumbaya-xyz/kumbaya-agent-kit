@@ -1,6 +1,6 @@
 {
   "name": "@kumbaya_xyz/kumbaya-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Model Context Protocol server for the Kumbaya platform on MegaETH: DEX (quotes, pools, tokens, stats), launchpad, social, and search.",
   "type": "module",
   "bin": {
