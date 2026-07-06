@@ -20,6 +20,27 @@ export interface ServiceMeta {
 
 const excludeClient = (p: string) => /\/(admin|webhooks?|analytics|monitoring)(\/|$)/.test(p);
 
+// The client-api OpenAPI spec under-declares `security`, so op.security alone is
+// not reliable. Authenticated client-api routes are: anything declaring security,
+// every write method (except the public-write allowlist), and a few authed GETs.
+const CLIENT_PUBLIC_WRITES = new Set([
+  "/v1/session/create",
+  "/v1/session/wallet-state",
+  "/v1/session/wallet/verify",
+  "/v1/session/logout",
+  "/v1/tokens/batch/images",
+]);
+const CLIENT_AUTH_GETS = new Set(["/v1/gifts/status", "/v1/gifts/prepare", "/v1/launch/pending"]);
+
+function clientAuth(path: string, method: string, op: any): Auth {
+  if (op?.security) return "bearer";
+  if (CLIENT_AUTH_GETS.has(path)) return "bearer";
+  if (path.startsWith("/v1/launch")) return "bearer"; // launches are user-scoped
+  const isWrite = ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
+  if (isWrite && !CLIENT_PUBLIC_WRITES.has(path)) return "bearer";
+  return "public";
+}
+
 export const SERVICES: ServiceMeta[] = [
   {
     name: "exchange",
@@ -34,7 +55,7 @@ export const SERVICES: ServiceMeta[] = [
     prefix: "app",
     spec: clientSpec,
     defaultBaseUrl: "https://clients.kumbaya.xyz",
-    authOf: (_p, _m, op) => (op?.security ? "bearer" : "public"),
+    authOf: (p, m, op) => clientAuth(p, m, op),
     exclude: (p) => excludeClient(p),
   },
   {

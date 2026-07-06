@@ -33,7 +33,7 @@ const tools = buildTools(buildOpts);
 const byName = new Map(tools.map((t) => [t.name, t]));
 
 const server = new Server(
-  { name: "kumbaya-mcp", version: "0.2.0" },
+  { name: "kumbaya-mcp", version: "0.1.0" },
   { capabilities: { tools: {} } }
 );
 

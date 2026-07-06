@@ -1,7 +1,7 @@
 {
   "name": "kumbaya-mcp",
   "version": "0.1.0",
-  "description": "Model Context Protocol server for the Kumbaya DEX API on MegaETH — swap quotes, pools, tokens, stats, and positions.",
+  "description": "Model Context Protocol server for the Kumbaya platform on MegaETH: DEX (quotes, pools, tokens, stats), launchpad, social, and search.",
   "type": "module",
   "bin": {
     "kumbaya-mcp": "dist/index.js"
@@ -9,15 +9,15 @@
   "main": "dist/index.js",
   "files": [
     "dist",
-    "src/openapi.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --clean --loader .json=json",
+    "build": "tsup src/index.ts --format esm --clean",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "refresh-spec": "node scripts/refresh-spec.mjs"
+    "refresh-spec": "node scripts/refresh-spec.mjs",
+    "audit": "tsx src/audit.ts"
   },
   "keywords": [
     "mcp",
