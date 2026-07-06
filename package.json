@@ -44,12 +44,12 @@
   "author": "Kumbaya",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kumbaya-xyz/kumbaya-mcp.git"
+    "url": "git+https://github.com/Kumbaya-xyz/kumbaya-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/kumbaya-xyz/kumbaya-mcp/issues"
+    "url": "https://github.com/Kumbaya-xyz/kumbaya-mcp/issues"
   },
-  "homepage": "https://github.com/kumbaya-xyz/kumbaya-mcp#readme",
+  "homepage": "https://github.com/Kumbaya-xyz/kumbaya-mcp#readme",
   "publishConfig": {
     "access": "public"
   }
