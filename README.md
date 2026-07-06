@@ -90,7 +90,23 @@ npm run refresh-spec
 pnpm install
 pnpm dev      # run from source (stdio)
 pnpm build    # bundle to dist/
+pnpm audit    # exercise every tool against the live APIs
 ```
+
+## Releasing
+
+Releases publish to npm automatically on a version tag, via GitHub Actions using
+npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC). There
+is no npm token to manage, and each release ships with provenance.
+
+```bash
+npm version patch        # bumps package.json and creates a vX.Y.Z tag
+git push --follow-tags   # pushes the commit and tag, triggering the release
+```
+
+Use `npm version minor` or `major` for larger bumps. On the tag push, the
+[`publish` workflow](.github/workflows/publish.yml) verifies the tag matches
+`package.json`, builds, sanity-checks the server, and publishes.
 
 ## License
 
