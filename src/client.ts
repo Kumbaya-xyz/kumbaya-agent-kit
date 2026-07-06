@@ -11,10 +11,6 @@ export interface CallResult {
   data: unknown;
 }
 
-// Executes an endpoint against its service's base URL: fills path params, builds
-// the query string, attaches a JSON body for write tools, and adds credentials
-// when configured (x-api-key for partner quote endpoints, Bearer for client-api
-// authenticated endpoints). Sending them on public endpoints is harmless.
 export async function callEndpoint(
   cfg: ClientConfig,
   tool: ToolDef,
@@ -38,12 +34,21 @@ export async function callEndpoint(
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
   if (cfg.jwt) headers["authorization"] = `Bearer ${cfg.jwt}`;
 
-  let body: string | undefined;
+  let body: string | FormData | undefined;
   if (tool.bodyProps.length > 0) {
     const b: Record<string, any> = {};
     for (const k of tool.bodyProps) if (args[k] !== undefined) b[k] = args[k];
-    body = JSON.stringify(b);
-    headers["content-type"] = "application/json";
+    if (tool.bodyContentType === "multipart/form-data") {
+      const fd = new FormData();
+      for (const [k, v] of Object.entries(b)) fd.append(k, String(v));
+      body = fd;
+    } else if (tool.bodyContentType === "application/x-www-form-urlencoded") {
+      body = new URLSearchParams(b as Record<string, string>).toString();
+      headers["content-type"] = "application/x-www-form-urlencoded";
+    } else {
+      body = JSON.stringify(b);
+      headers["content-type"] = "application/json";
+    }
   }
 
   const res = await fetch(url, { method: tool.method, headers, body });

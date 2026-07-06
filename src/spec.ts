@@ -79,6 +79,7 @@ export interface ToolDef {
   pathParams: string[];
   queryParams: string[];
   bodyProps: string[];
+  bodyContentType: string | null; // application/json | multipart/form-data | application/x-www-form-urlencoded
   inputSchema: Record<string, any>;
 }
 
@@ -152,10 +153,20 @@ export function buildTools(opts: BuildOptions = {}): ToolDef[] {
           else if (p.in === "query") queryParams.push(p.name);
         }
 
-        const bodySchema = deref(spec, op.requestBody?.content?.["application/json"]?.schema);
+        const content = op.requestBody?.content || {};
+        let bodyContentType: string | null = null;
+        for (const ct of ["application/json", "multipart/form-data", "application/x-www-form-urlencoded"]) {
+          if (content[ct]) { bodyContentType = ct; break; }
+        }
+        if (!bodyContentType && Object.keys(content).length) bodyContentType = Object.keys(content)[0];
+
+        const bodySchema = bodyContentType ? deref(spec, content[bodyContentType]?.schema) : undefined;
         if (bodySchema?.properties) {
           for (const [k, v] of Object.entries<any>(bodySchema.properties)) {
-            properties[k] = deref(spec, v);
+            const ps = deref(spec, v);
+            properties[k] = ps?.format === "binary"
+              ? { type: "string", description: `${ps.description || k} (file path or URL; optional)` }
+              : ps;
             bodyProps.push(k);
           }
           for (const r of bodySchema.required || []) if (!required.includes(r)) required.push(r);
@@ -177,6 +188,7 @@ export function buildTools(opts: BuildOptions = {}): ToolDef[] {
           pathParams,
           queryParams,
           bodyProps,
+          bodyContentType,
           inputSchema: { type: "object", properties, required },
         });
       }
