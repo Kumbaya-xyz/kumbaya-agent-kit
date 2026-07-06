@@ -1,8 +1,8 @@
 import type { ToolDef } from "./spec.js";
 
 export interface ClientConfig {
-  baseUrl: string;
-  apiKey?: string;
+  apiKey?: string; // exchange partner key -> x-api-key
+  jwt?: string; // client-api auth -> Authorization: Bearer
 }
 
 export interface CallResult {
@@ -11,9 +11,10 @@ export interface CallResult {
   data: unknown;
 }
 
-// Executes an endpoint: fills path params, builds the query string, attaches the
-// request body for POST tools, and sets x-api-key when a partner key is configured
-// (harmless on public endpoints, required for quote POST + quote/tokens).
+// Executes an endpoint against its service's base URL: fills path params, builds
+// the query string, attaches a JSON body for write tools, and adds credentials
+// when configured (x-api-key for partner quote endpoints, Bearer for client-api
+// authenticated endpoints). Sending them on public endpoints is harmless.
 export async function callEndpoint(
   cfg: ClientConfig,
   tool: ToolDef,
@@ -27,7 +28,7 @@ export async function callEndpoint(
     path = path.replace(`{${p}}`, encodeURIComponent(String(args[p])));
   }
 
-  const url = new URL(cfg.baseUrl.replace(/\/+$/, "") + path);
+  const url = new URL(tool.baseUrl.replace(/\/+$/, "") + path);
   for (const q of tool.queryParams) {
     const v = args[q];
     if (v !== undefined && v !== null && v !== "") url.searchParams.set(q, String(v));
@@ -35,6 +36,7 @@ export async function callEndpoint(
 
   const headers: Record<string, string> = { accept: "application/json" };
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
+  if (cfg.jwt) headers["authorization"] = `Bearer ${cfg.jwt}`;
 
   let body: string | undefined;
   if (tool.bodyProps.length > 0) {

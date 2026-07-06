@@ -1,12 +1,17 @@
 # kumbaya-mcp
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server for the
-**Kumbaya DEX API** on MegaETH. Gives any MCP client (Claude, Cursor, Hermes, etc.)
-live access to swap quotes, pool data, token metrics, global stats, and user
-positions.
+**Kumbaya platform** on MegaETH. Gives any MCP client (Claude, Cursor, Hermes,
+etc.) live access to the DEX, the launchpad, social data, and search.
 
-The server is **generated directly from Kumbaya's OpenAPI spec**, so its tools
-always match the real API. There are no hand-copied endpoint definitions to drift.
+It covers three Kumbaya services, generated **directly from their OpenAPI specs**
+so the tools always match the real APIs:
+
+| Service | What | Tools |
+| --- | --- | --- |
+| `exchange` | DEX — swap quotes, pools, tokens, stats, positions | 29 |
+| `client` | App — launchpad, tokens, comments, gifts/fuel, feed, content, competition, badges, users | 76 |
+| `search` | Token & pool full-text search | 8 |
 
 ## Install
 
@@ -14,7 +19,7 @@ always match the real API. There are no hand-copied endpoint definitions to drif
 npx kumbaya-mcp
 ```
 
-Or add it to your MCP client config:
+MCP client config:
 
 ```json
 {
@@ -23,7 +28,8 @@ Or add it to your MCP client config:
       "command": "npx",
       "args": ["-y", "kumbaya-mcp"],
       "env": {
-        "KUMBAYA_API_KEY": "optional-partner-key"
+        "KUMBAYA_API_KEY": "optional-partner-key",
+        "KUMBAYA_JWT": "optional-user-jwt"
       }
     }
   }
@@ -34,49 +40,48 @@ Or add it to your MCP client config:
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
-| `KUMBAYA_MCP_BASE_URL` | `https://exchange.kumbaya.xyz` | API base URL |
-| `KUMBAYA_API_KEY` | (unset) | Partner API key, sent as `x-api-key`. Only needed for the quote endpoints (see below). |
+| `KUMBAYA_MCP_SERVICES` | all | Comma-list of services to expose, e.g. `exchange,search`. Trims the tool count. |
+| `KUMBAYA_API_KEY` | (unset) | Partner API key (`x-api-key`) — required for the quote endpoints. |
+| `KUMBAYA_JWT` | (unset) | User JWT (`Authorization: Bearer`) — required for authenticated client-api actions. |
+| `KUMBAYA_EXCHANGE_URL` | `https://exchange.kumbaya.xyz` | Override exchange base URL |
+| `KUMBAYA_CLIENT_URL` | `https://clients.kumbaya.xyz` | Override client base URL |
+| `KUMBAYA_SEARCH_URL` | `https://search.kumbaya.xyz` | Override search base URL |
 
 ## Chains
 
-| Network | `chainId` |
-| --- | --- |
-| MegaETH Mainnet | `4326` |
-| MegaETH Testnet | `6343` |
+`4326` = MegaETH Mainnet, `6343` = MegaETH Testnet. DEX and search tools take a
+`chainId`.
 
-Every tool takes a `chainId` argument.
+## Authentication, by tier
 
-## Tools
+- **Public** — most reads (pools, tokens, stats, positions, feed, content, search).
+  No credentials.
+- **Partner key** (`KUMBAYA_API_KEY`) — the four quote endpoints: `dex_get_quote`,
+  `dex_post_quote`, `dex_post_quote_open`, `dex_get_quote_tokens`. Without a key
+  they return `401 Invalid API key`. "Open" means the token allowlist is off, not
+  no-auth. **Request a key from the Kumbaya team.**
+- **User JWT** (`KUMBAYA_JWT`) — authenticated client-api actions (create a launch,
+  post a comment, send a gift, edit your profile, etc.). Without a token they
+  return `401 Authentication required`.
 
-All tools map 1:1 to Kumbaya Exchange API endpoints.
+Tool descriptions carry a `[PARTNER ONLY: ...]` or `[Requires authentication: ...]`
+tag so clients know which credential a tool needs.
 
-**Public (no key required):**
+> **Getting a JWT.** Client-api auth is a JWT issued via Privy or Sign-In With
+> Ethereum (SIWE). This server does not sign for you — it takes a JWT you already
+> hold via `KUMBAYA_JWT`. The SIWE endpoints (`app_post_session_nonce`,
+> `app_post_session_verify`) are exposed as tools if you drive the flow yourself.
 
-- Pools — `get_pools`, `get_pools_list`, `get_pools_metrics`, `get_pools_admitted`,
-  `get_pools_by_pool_id`, and per-pool `..._timeseries`, `..._activity`, `..._ticks`,
-  `..._positions`, `..._swaps`, `..._flow_chart`
-- Tokens — `get_tokens_trending`, `get_tokens_bluechip`, `get_tokens_prices`,
-  `get_tokens_fire_meta`, `get_tokens_by_token_id`, and per-token `..._history`,
-  `..._swaps`, `..._eth_price`
-- Stats & status — `get_stats_global`, `get_indexer_status`, `get_status`, `get_health`
-- Positions — `get_users_by_owner_positions_active`
+Internal/privileged endpoints (admin, webhooks, analytics, monitoring) are
+excluded.
 
-**Partner only (require an API key):**
+## Keeping it accurate
 
-- `get_quote`, `post_quote`, `get_quote_tokens`, `post_quote_open`
-
-> The quote endpoints are gated behind a partner API key. "Open" means *no token
-> allowlist*, not *no auth* — all quote routes need a key. Set `KUMBAYA_API_KEY`
-> and **reach out to the Kumbaya team to request access.** Without a key these tools
-> return `401 Invalid API key`.
-
-## How it stays accurate
-
-The bundled `src/openapi.json` is Kumbaya's live spec. To update after an API
-change:
+The bundled specs in `src/specs/` are the live Kumbaya OpenAPI documents. Refresh
+after an API change:
 
 ```bash
-npm run refresh-spec   # re-fetches the spec, regenerates nothing else needed
+npm run refresh-spec
 ```
 
 ## Develop

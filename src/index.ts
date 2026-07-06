@@ -5,19 +5,35 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { buildTools, SPEC_INFO } from "./spec.js";
+import { buildTools, SERVICE_NAMES, type BuildOptions } from "./spec.js";
 import { callEndpoint, type ClientConfig } from "./client.js";
 
-const cfg: ClientConfig = {
-  baseUrl: process.env.KUMBAYA_MCP_BASE_URL || SPEC_INFO.server || "https://exchange.kumbaya.xyz",
-  apiKey: process.env.KUMBAYA_API_KEY,
+// Which services to expose. Default: all. e.g. KUMBAYA_MCP_SERVICES=exchange,search
+const services = (process.env.KUMBAYA_MCP_SERVICES || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const baseUrls: Record<string, string> = {};
+if (process.env.KUMBAYA_EXCHANGE_URL) baseUrls.exchange = process.env.KUMBAYA_EXCHANGE_URL;
+if (process.env.KUMBAYA_CLIENT_URL) baseUrls.client = process.env.KUMBAYA_CLIENT_URL;
+if (process.env.KUMBAYA_SEARCH_URL) baseUrls.search = process.env.KUMBAYA_SEARCH_URL;
+
+const buildOpts: BuildOptions = {
+  services: services.length ? services : undefined,
+  baseUrls,
 };
 
-const tools = buildTools();
+const cfg: ClientConfig = {
+  apiKey: process.env.KUMBAYA_API_KEY,
+  jwt: process.env.KUMBAYA_JWT,
+};
+
+const tools = buildTools(buildOpts);
 const byName = new Map(tools.map((t) => [t.name, t]));
 
 const server = new Server(
-  { name: "kumbaya-mcp", version: "0.1.0" },
+  { name: "kumbaya-mcp", version: "0.2.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -47,6 +63,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
+const enabled = services.length ? services.join(",") : SERVICE_NAMES.join(",");
 console.error(
-  `kumbaya-mcp ready — ${tools.length} tools from ${SPEC_INFO.title} v${SPEC_INFO.version}, base ${cfg.baseUrl}${cfg.apiKey ? " (api key set)" : ""}`
+  `kumbaya-mcp ready — ${tools.length} tools across [${enabled}]${cfg.apiKey ? " +api-key" : ""}${cfg.jwt ? " +jwt" : ""}`
 );
