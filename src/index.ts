@@ -27,6 +27,7 @@ const buildOpts: BuildOptions = {
 const cfg: ClientConfig = {
   apiKey: process.env.KUMBAYA_API_KEY,
   jwt: process.env.KUMBAYA_JWT,
+  jwtFile: process.env.KUMBAYA_JWT_FILE,
 };
 
 const tools = buildTools(buildOpts);
@@ -65,5 +66,5 @@ const transport = new StdioServerTransport();
 await server.connect(transport);
 const enabled = services.length ? services.join(",") : SERVICE_NAMES.join(",");
 console.error(
-  `kumbaya-mcp ready — ${tools.length} tools across [${enabled}]${cfg.apiKey ? " +api-key" : ""}${cfg.jwt ? " +jwt" : ""}`
+  `kumbaya-mcp ready — ${tools.length} tools across [${enabled}]${cfg.apiKey ? " +api-key" : ""}${cfg.jwt || cfg.jwtFile ? " +jwt" : ""}`
 );

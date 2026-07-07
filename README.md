@@ -43,6 +43,7 @@ MCP client config:
 | `KUMBAYA_MCP_SERVICES` | all | Comma-list of services to expose, e.g. `exchange,search`. Trims the tool count. |
 | `KUMBAYA_API_KEY` | (unset) | Partner API key (`x-api-key`). Required for the quote endpoints. |
 | `KUMBAYA_JWT` | (unset) | User JWT (`Authorization: Bearer`). Required for authenticated client-api actions. |
+| `KUMBAYA_JWT_FILE` | (unset) | Path to a file holding the JWT, re-read per request. Use this when the token is rotated by an external process so the server picks up the new value without a restart. Takes precedence over `KUMBAYA_JWT`. |
 | `KUMBAYA_EXCHANGE_URL` | `https://exchange.kumbaya.xyz` | Override exchange base URL |
 | `KUMBAYA_CLIENT_URL` | `https://clients.kumbaya.xyz` | Override client base URL |
 | `KUMBAYA_SEARCH_URL` | `https://search.kumbaya.xyz` | Override search base URL |

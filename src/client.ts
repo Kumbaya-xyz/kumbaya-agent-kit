@@ -1,8 +1,24 @@
+import { readFileSync } from "node:fs";
 import type { ToolDef } from "./spec.js";
 
 export interface ClientConfig {
   apiKey?: string; // exchange partner key -> x-api-key
   jwt?: string; // client-api auth -> Authorization: Bearer
+  jwtFile?: string; // path to a file holding the JWT; re-read per request (token refresh)
+}
+
+// Resolve the bearer JWT at call time: prefer the file (so a cron re-mint is picked up
+// without restarting the MCP), else the static env value.
+function resolveJwt(cfg: ClientConfig): string | undefined {
+  if (cfg.jwtFile) {
+    try {
+      const t = readFileSync(cfg.jwtFile, "utf8").trim();
+      if (t) return t;
+    } catch {
+      // fall through to the static value
+    }
+  }
+  return cfg.jwt;
 }
 
 export interface CallResult {
@@ -32,7 +48,8 @@ export async function callEndpoint(
 
   const headers: Record<string, string> = { accept: "application/json" };
   if (cfg.apiKey) headers["x-api-key"] = cfg.apiKey;
-  if (cfg.jwt) headers["authorization"] = `Bearer ${cfg.jwt}`;
+  const jwt = resolveJwt(cfg);
+  if (jwt) headers["authorization"] = `Bearer ${jwt}`;
 
   let body: string | FormData | undefined;
   if (tool.bodyProps.length > 0) {
