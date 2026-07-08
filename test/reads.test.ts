@@ -38,3 +38,31 @@ test("get_balance: rejects an invalid token address", async () => {
     /valid address/i
   );
 });
+
+// Real testnet pool discovered via the public exchange API.
+const WBTC = "0x59cB6631689f6627D8b7ef6B3412F7F8d12fB86e";
+const USDT = "0x8E1eb0b74A0aC37abaa0f75C598A681975896900";
+const WBTC_USDT_POOL = "0xb87831203D3C67109A2082e16a62C3004e98A025";
+
+test("get_token: live WBTC metadata on testnet", async () => {
+  const r: any = await handler("get_token")({ token: WBTC, chainId: 6343 });
+  assert.equal(r.symbol, "WBTC");
+  assert.ok(Number.isInteger(r.decimals) && r.decimals > 0);
+  assert.match(r.totalSupply, /^\d/);
+  assert.ok(BigInt(r.totalSupplyRaw) > 0n);
+});
+
+test("get_pool: computePoolAddress matches the real on-chain pool (custom init hash)", async () => {
+  const r: any = await handler("get_pool")({ tokenA: WBTC, tokenB: USDT, fee: 3000, chainId: 6343 });
+  assert.equal(r.exists, true, "pool exists on testnet");
+  assert.equal(r.address.toLowerCase(), WBTC_USDT_POOL.toLowerCase(), "address matches the real pool");
+  assert.ok(BigInt(r.liquidity) > 0n, "pool has liquidity");
+  assert.ok(Number.isInteger(r.tick));
+  assert.ok(r.price, "price both directions present");
+});
+
+test("get_pool: token order does not change the pool address", async () => {
+  const a: any = await handler("get_pool")({ tokenA: WBTC, tokenB: USDT, fee: 3000, chainId: 6343 });
+  const b: any = await handler("get_pool")({ tokenA: USDT, tokenB: WBTC, fee: 3000, chainId: 6343 });
+  assert.equal(a.address, b.address);
+});
