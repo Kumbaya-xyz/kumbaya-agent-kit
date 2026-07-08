@@ -66,3 +66,32 @@ test("get_pool: token order does not change the pool address", async () => {
   const b: any = await handler("get_pool")({ tokenA: USDT, tokenB: WBTC, fee: 3000, chainId: 6343 });
   assert.equal(a.address, b.address);
 });
+
+const WETH = "0x4200000000000000000000000000000000000006";
+
+test("quote: direct route WBTC->USDT returns a positive amount", async () => {
+  const r: any = await handler("quote")({ tokenIn: WBTC, tokenOut: USDT, amountIn: "0.001", chainId: 6343 });
+  assert.ok(Number(r.amountOut) > 0, "positive amountOut");
+  assert.ok(BigInt(r.amountOutRaw) > 0n);
+  assert.equal(r.route, "WBTC -> USDT", "picks the direct route");
+});
+
+test("quote: finds a multi-hop route WETH->WBTC (no direct pool)", async () => {
+  const r: any = await handler("quote")({ tokenIn: WETH, tokenOut: WBTC, amountIn: "0.01", chainId: 6343 });
+  assert.ok(Number(r.amountOut) > 0, "positive amountOut via multi-hop");
+  assert.ok(r.route.split("->").length >= 2, "route has at least one hop");
+});
+
+test("quote: exact-out (amountOut) also resolves", async () => {
+  const r: any = await handler("quote")({ tokenIn: WBTC, tokenOut: USDT, amountOut: "10", chainId: 6343 });
+  assert.ok(Number(r.amountIn) > 0, "positive amountIn for exact-out");
+  assert.equal(r.amountOut, "10");
+});
+
+test("quote: requires exactly one of amountIn/amountOut", async () => {
+  await assert.rejects(() => handler("quote")({ tokenIn: WETH, tokenOut: WBTC, chainId: 6343 }), /exactly one/i);
+  await assert.rejects(
+    () => handler("quote")({ tokenIn: WETH, tokenOut: WBTC, amountIn: "1", amountOut: "1", chainId: 6343 }),
+    /exactly one/i
+  );
+});

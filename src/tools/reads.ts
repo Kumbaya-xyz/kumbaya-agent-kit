@@ -1,9 +1,11 @@
 import { z } from "zod";
-import { formatEther, formatUnits, erc20Abi, isAddress } from "viem";
+import { formatEther, formatUnits, parseUnits, erc20Abi, isAddress } from "viem";
 import { computePoolAddress, Pool } from "@kumbaya_xyz/v3-sdk";
+import { TradeType } from "@kumbaya_xyz/sdk-core";
 import { publicClient, account } from "../clients.js";
 import { DEFAULT_CHAIN_ID, getChain, type ChainId } from "../config/chains.js";
 import { getToken } from "../lib/tokens.js";
+import { quoteBest } from "../lib/routing.js";
 import { UNIV3_POOL_ABI } from "../lib/abis.js";
 import type { ToolDef } from "./registry.js";
 
@@ -137,6 +139,46 @@ export const readTools: ToolDef[] = [
           [`${token0.symbol}_per_${token1.symbol}`]: pool.token1Price.toSignificant(8),
           [`${token1.symbol}_per_${token0.symbol}`]: pool.token0Price.toSignificant(8),
         },
+      };
+    },
+  },
+  {
+    name: "quote",
+    description:
+      "Best swap quote + route from tokenIn to tokenOut. Provide exactly one of amountIn (you spend) or amountOut (you want to receive), in human units. Read-only.",
+    schema: {
+      tokenIn: z.string().describe("Token you spend (address)."),
+      tokenOut: z.string().describe("Token you receive (address)."),
+      amountIn: z.string().optional().describe("Amount of tokenIn to spend (exact-in). Provide this OR amountOut."),
+      amountOut: z.string().optional().describe("Amount of tokenOut wanted (exact-out). Provide this OR amountIn."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      if (Boolean(args.amountIn) === Boolean(args.amountOut))
+        throw new Error("Provide exactly one of amountIn or amountOut.");
+      const [tIn, tOut] = await Promise.all([getToken(chainId, args.tokenIn), getToken(chainId, args.tokenOut)]);
+      const exactIn = Boolean(args.amountIn);
+      const raw = exactIn ? parseUnits(args.amountIn, tIn.decimals) : parseUnits(args.amountOut, tOut.decimals);
+      const q = await quoteBest({
+        chainId,
+        tokenIn: tIn.address,
+        tokenOut: tOut.address,
+        amount: raw.toString(),
+        tradeType: exactIn ? TradeType.EXACT_INPUT : TradeType.EXACT_OUTPUT,
+      });
+      const inNum = Number(q.amountIn.toSignificant(12));
+      const outNum = Number(q.amountOut.toSignificant(12));
+      return {
+        chainId,
+        route: q.path.join(" -> "),
+        tokenIn: { symbol: tIn.symbol, address: tIn.address },
+        tokenOut: { symbol: tOut.symbol, address: tOut.address },
+        amountIn: q.amountIn.toSignificant(8),
+        amountInRaw: q.amountIn.quotient.toString(),
+        amountOut: q.amountOut.toSignificant(8),
+        amountOutRaw: q.amountOut.quotient.toString(),
+        rate: inNum > 0 ? `1 ${tIn.symbol} ≈ ${(outNum / inNum).toPrecision(6)} ${tOut.symbol}` : undefined,
       };
     },
   },
