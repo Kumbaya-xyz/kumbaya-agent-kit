@@ -5,10 +5,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ok, type ToolDef } from "./tools/registry.js";
 import { readTools } from "./tools/reads.js";
+import { writeTools } from "./tools/writes.js";
 
 const server = new McpServer({ name: "kumbaya-onchain-mcp", version: "0.1.0" });
 
-const allTools: ToolDef[] = [...readTools];
+const allTools: ToolDef[] = [...readTools, ...writeTools];
 
 for (const t of allTools) {
   server.tool(t.name, t.description, t.schema, async (args: unknown) => {
