@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { formatEther, formatUnits, parseUnits, erc20Abi, isAddress } from "viem";
-import { computePoolAddress, Pool } from "@kumbaya_xyz/v3-sdk";
+import { computePoolAddress, Pool, Position } from "@kumbaya_xyz/v3-sdk";
 import { TradeType } from "@kumbaya_xyz/sdk-core";
 import { publicClient, account } from "../clients.js";
 import { DEFAULT_CHAIN_ID, getChain, type ChainId } from "../config/chains.js";
 import { getToken } from "../lib/tokens.js";
 import { quoteBest } from "../lib/routing.js";
-import { UNIV3_POOL_ABI } from "../lib/abis.js";
+import { UNIV3_POOL_ABI, NPM_ABI, FUEL_VAULT_ABI } from "../lib/abis.js";
 import type { ToolDef } from "./registry.js";
 
 const chainArg = z
@@ -179,6 +179,131 @@ export const readTools: ToolDef[] = [
         amountOut: q.amountOut.toSignificant(8),
         amountOutRaw: q.amountOut.quotient.toString(),
         rate: inNum > 0 ? `1 ${tIn.symbol} ≈ ${(outNum / inNum).toPrecision(6)} ${tOut.symbol}` : undefined,
+      };
+    },
+  },
+  {
+    name: "list_positions",
+    description:
+      "Uniswap V3 liquidity positions (NFTs) owned by an address: pair, fee tier, tick range, in-range status, underlying token amounts, and uncollected fees. Defaults to the configured wallet.",
+    schema: {
+      address: z.string().optional().describe("Owner address. Defaults to the configured wallet."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const cfg = getChain(chainId);
+      const pc = publicClient(chainId);
+      const owner = (args.address || account()?.address) as `0x${string}` | undefined;
+      if (!owner) throw new Error("No address provided and no wallet configured.");
+      if (!isAddress(owner)) throw new Error("address is not a valid address");
+      const npm = cfg.addresses.positionManager;
+
+      const count = (await pc.readContract({
+        address: npm,
+        abi: NPM_ABI,
+        functionName: "balanceOf",
+        args: [owner],
+      })) as bigint;
+
+      const ids = (await Promise.all(
+        Array.from({ length: Number(count) }, (_, i) =>
+          pc.readContract({ address: npm, abi: NPM_ABI, functionName: "tokenOfOwnerByIndex", args: [owner, BigInt(i)] }),
+        ),
+      )) as bigint[];
+
+      const positions = await Promise.all(
+        ids.map(async (tokenId) => {
+          const p = (await pc.readContract({
+            address: npm,
+            abi: NPM_ABI,
+            functionName: "positions",
+            args: [tokenId],
+          })) as readonly unknown[];
+          const [, , t0Addr, t1Addr, fee, tickLower, tickUpper, liq, , , owed0, owed1] = p as [
+            bigint, string, string, string, number, number, number, bigint, bigint, bigint, bigint, bigint,
+          ];
+          const [token0, token1] = await Promise.all([getToken(chainId, t0Addr), getToken(chainId, t1Addr)]);
+          const base = {
+            tokenId: tokenId.toString(),
+            pair: `${token0.symbol}/${token1.symbol}`,
+            fee: Number(fee),
+            tickLower: Number(tickLower),
+            tickUpper: Number(tickUpper),
+            liquidity: (liq as bigint).toString(),
+            uncollectedFees: {
+              [token0.symbol!]: formatUnits(owed0 as bigint, token0.decimals),
+              [token1.symbol!]: formatUnits(owed1 as bigint, token1.decimals),
+            },
+          };
+          if ((liq as bigint) === 0n) return { ...base, closed: true };
+          const address = computePoolAddress({
+            factoryAddress: cfg.addresses.factory,
+            tokenA: token0,
+            tokenB: token1,
+            fee: Number(fee),
+            chainId,
+          }) as `0x${string}`;
+          try {
+            const [slot0, poolLiq] = (await Promise.all([
+              pc.readContract({ address, abi: UNIV3_POOL_ABI, functionName: "slot0" }),
+              pc.readContract({ address, abi: UNIV3_POOL_ABI, functionName: "liquidity" }),
+            ])) as [readonly unknown[], bigint];
+            const tick = Number(slot0[1] as number | bigint);
+            const pool = new Pool(token0, token1, Number(fee), (slot0[0] as bigint).toString(), poolLiq.toString(), tick);
+            const pos = new Position({ pool, liquidity: (liq as bigint).toString(), tickLower: Number(tickLower), tickUpper: Number(tickUpper) });
+            return {
+              ...base,
+              inRange: tick >= Number(tickLower) && tick < Number(tickUpper),
+              amounts: {
+                [token0.symbol!]: pos.amount0.toSignificant(8),
+                [token1.symbol!]: pos.amount1.toSignificant(8),
+              },
+            };
+          } catch {
+            return base;
+          }
+        }),
+      );
+      return { chainId, owner, count: Number(count), positions };
+    },
+  },
+  {
+    name: "get_tips",
+    description:
+      "Tip (FuelVault) balances for a token, denominated in that token: your spendable tip credits, and your creator earnings (liquid = withdrawable now, vested = still locked). Defaults to the configured wallet.",
+    schema: {
+      token: z.string().describe("The launched token address whose tip vault to read."),
+      user: z.string().optional().describe("User/creator address. Defaults to the configured wallet."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const cfg = getChain(chainId);
+      const pc = publicClient(chainId);
+      const user = (args.user || account()?.address) as `0x${string}` | undefined;
+      if (!user) throw new Error("No user provided and no wallet configured.");
+      if (!isAddress(user)) throw new Error("user is not a valid address");
+      const token = await getToken(chainId, args.token);
+      const vault = cfg.addresses.fuelVault;
+
+      const [credits, bucket] = (await Promise.all([
+        pc.readContract({ address: vault, abi: FUEL_VAULT_ABI, functionName: "getCredits", args: [user, token.address as `0x${string}`] }),
+        pc.readContract({ address: vault, abi: FUEL_VAULT_ABI, functionName: "getCreatorBucket", args: [user, token.address as `0x${string}`] }),
+      ])) as [bigint, readonly [bigint, bigint, boolean]];
+
+      const [liquid, vested, unlocked] = bucket;
+      return {
+        chainId,
+        token: { address: token.address, symbol: token.symbol, decimals: token.decimals },
+        user,
+        spendableCredits: formatUnits(credits, token.decimals),
+        creatorEarnings: {
+          liquid: formatUnits(liquid, token.decimals),
+          vested: formatUnits(vested, token.decimals),
+          unlocked,
+          withdrawable: unlocked ? formatUnits(liquid, token.decimals) : "0",
+        },
       };
     },
   },
