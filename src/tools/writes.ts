@@ -1,5 +1,18 @@
 import { z } from "zod";
-import { parseUnits, formatUnits, erc20Abi, isAddress, getAddress } from "viem";
+import {
+  parseUnits,
+  formatUnits,
+  erc20Abi,
+  isAddress,
+  getAddress,
+  keccak256,
+  toHex,
+  concat,
+  encodeAbiParameters,
+  encodeFunctionData,
+  decodeEventLog,
+  getContractAddress,
+} from "viem";
 import { Ether, CurrencyAmount, Percent, TradeType, type Currency } from "@kumbaya_xyz/sdk-core";
 import {
   Route,
@@ -15,8 +28,17 @@ import { publicClient, walletClient, requireAccount } from "../clients.js";
 import { DEFAULT_CHAIN_ID, getChain, type ChainId } from "../config/chains.js";
 import { getToken } from "../lib/tokens.js";
 import { quoteBest } from "../lib/routing.js";
-import { UNIV3_POOL_ABI, NPM_ABI } from "../lib/abis.js";
+import { UNIV3_POOL_ABI, NPM_ABI, FUEL_VAULT_ABI, FIRE_STREAM_ABI, FIRE_TOKEN_ABI } from "../lib/abis.js";
+import { FIRE_TOKEN_BYTECODE, FIRE_LAUNCH_PARAMS, FIRE_LAUNCH_ABI } from "../lib/fireToken.js";
 import type { ToolDef } from "./registry.js";
+
+// FireToken constructor ABI (for CREATE2 init-code hash). Order matches the
+// frontend's authoritative deployment path; creatorToVesting is 0 (no creator alloc).
+const FIRE_TOKEN_CTOR_TYPES = [
+  { type: "string" }, { type: "string" }, { type: "uint256" },
+  { type: "address" }, { type: "address" }, { type: "address" }, { type: "address" },
+  { type: "uint16" }, { type: "uint256" }, { type: "address" }, { type: "uint256" }, { type: "address" },
+] as const;
 
 const MAX_UINT128 = (1n << 128n) - 1n;
 
@@ -387,6 +409,248 @@ export const writeTools: ToolDef[] = [
         },
         liquidityRemoved: removed.toString(),
         ...sent,
+      };
+    },
+  },
+  {
+    name: "ignite",
+    description:
+      "Create (launch) a new token on the Kumbaya Fire bonding-curve protocol. Only name and symbol are required; the protocol's standard launch parameters (supply, curve ticks, fee tier) are used. " +
+      "Mines a CREATE2 salt so the token sorts as token0 vs WETH, then calls FireLaunch.ignite. Returns the new token + pool addresses. Real transaction (no ETH required).",
+    schema: {
+      name: z.string().min(1).describe("Token name."),
+      symbol: z.string().min(1).describe("Token symbol/ticker."),
+      totalSupply: z.string().optional().describe("Total supply in whole tokens (default 1,000,000,000)."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const cfg = getChain(chainId);
+      const a = cfg.addresses;
+      const fireLaunch = getAddress(a.fireLaunch);
+      const numeraire = getAddress(a.weth9);
+      const creator = requireAccount().address;
+      const P = FIRE_LAUNCH_PARAMS;
+      const totalSupply = args.totalSupply ? parseUnits(args.totalSupply, 18) : P.defaultTotalSupply;
+
+      // Reproduce the FireToken constructor encoding to predict the CREATE2 address.
+      const ctorArgs = encodeAbiParameters(FIRE_TOKEN_CTOR_TYPES, [
+        args.name,
+        args.symbol,
+        totalSupply,
+        getAddress(a.fuelVault),
+        fireLaunch, // owner
+        getAddress(a.fireGraduator),
+        getAddress(a.positionManager),
+        P.skimBps,
+        P.vestingDuration,
+        creator,
+        0n, // creatorToVesting (creatorAllocationBps = 0)
+        fireLaunch, // launchpad
+      ]);
+      const initCodeHash = keccak256(concat([FIRE_TOKEN_BYTECODE, ctorArgs]));
+
+      // Mine a salt so the deployed token address < numeraire (token is token0).
+      let salt: `0x${string}` | undefined;
+      let predicted: `0x${string}` | undefined;
+      const seed = `${args.name}-${args.symbol}-${creator}-${Date.now()}`;
+      for (let i = 0; i < 2_000_000; i++) {
+        const s = keccak256(toHex(`${seed}-${i}`));
+        const addr = getContractAddress({ opcode: "CREATE2", from: fireLaunch, salt: s, bytecodeHash: initCodeHash });
+        if (addr.toLowerCase() < numeraire.toLowerCase()) {
+          salt = s;
+          predicted = getAddress(addr);
+          break;
+        }
+      }
+      if (!salt || !predicted) throw new Error("Failed to mine a token0-ordered salt.");
+
+      const data = encodeFunctionData({
+        abi: FIRE_LAUNCH_ABI,
+        functionName: "ignite",
+        args: [{
+          name: args.name,
+          symbol: args.symbol,
+          totalSupply,
+          numeraire,
+          tickLower: P.tickLower,
+          tickUpper: P.tickUpper,
+          feeTier: P.feeTier,
+          skimBps: P.skimBps,
+          creatorAllocationBps: P.creatorAllocationBps,
+          maxShareToBeSoldBps: P.maxShareToBeSoldBps,
+          numPositions: P.numPositions,
+          vestingDuration: P.vestingDuration,
+          salt,
+        }],
+      });
+
+      const wc = walletClient(chainId);
+      const pc = publicClient(chainId);
+      const hash = await wc.sendTransaction({ account: requireAccount(), chain: wc.chain, to: fireLaunch, data, value: 0n });
+      const receipt = await pc.waitForTransactionReceipt({ hash });
+
+      let token: string | undefined;
+      let pool: string | undefined;
+      for (const log of receipt.logs) {
+        try {
+          const d = decodeEventLog({ abi: FIRE_LAUNCH_ABI, data: log.data, topics: log.topics });
+          if (d.eventName === "TokenIgnited") {
+            token = (d.args as { token: string }).token;
+            pool = (d.args as { pool: string }).pool;
+            break;
+          }
+        } catch {
+          /* not our event */
+        }
+      }
+
+      return {
+        chainId,
+        action: "ignite",
+        name: args.name,
+        symbol: args.symbol,
+        totalSupply: formatUnits(totalSupply, 18),
+        token: token ?? predicted,
+        pool,
+        predictedMatches: token ? getAddress(token) === predicted : undefined,
+        txHash: hash,
+        status: receipt.status,
+        explorer: `${cfg.explorerUrl}/tx/${hash}`,
+      };
+    },
+  },
+  {
+    name: "withdraw_tips",
+    description: "Withdraw your unlocked creator tips for a launched token from the FuelVault to your wallet. Reverts cleanly if there is nothing withdrawable. Real transaction.",
+    schema: {
+      token: z.string().describe("The launched token address whose tips to withdraw."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const cfg = getChain(chainId);
+      const pc = publicClient(chainId);
+      const vault = getAddress(cfg.addresses.fuelVault);
+      const token = await getToken(chainId, args.token);
+      const me = requireAccount().address;
+
+      const bucket = (await pc.readContract({
+        address: vault,
+        abi: FUEL_VAULT_ABI,
+        functionName: "getCreatorBucket",
+        args: [me, token.address as `0x${string}`],
+      })) as readonly [bigint, bigint, boolean];
+      const [liquid, , unlocked] = bucket;
+      if (!unlocked || liquid === 0n)
+        throw new Error(`Nothing withdrawable: liquid=${formatUnits(liquid, token.decimals)} ${token.symbol}, unlocked=${unlocked}.`);
+
+      const sim = await pc.simulateContract({
+        address: vault,
+        abi: FUEL_VAULT_ABI,
+        functionName: "withdraw",
+        args: [token.address as `0x${string}`],
+        account: requireAccount(),
+      });
+      const wc = walletClient(chainId);
+      const hash = await wc.writeContract(sim.request);
+      const receipt = await pc.waitForTransactionReceipt({ hash });
+      return {
+        chainId,
+        action: "withdraw_tips",
+        token: { address: token.address, symbol: token.symbol },
+        withdrawn: `${formatUnits(liquid, token.decimals)} ${token.symbol}`,
+        txHash: hash,
+        status: receipt.status,
+        explorer: `${cfg.explorerUrl}/tx/${hash}`,
+      };
+    },
+  },
+  {
+    name: "claim_fees",
+    description:
+      "Claim streamed trading fees for a token you launched (Fire). Tries the post-graduation graduator then the pre-graduation stream (or set source explicitly). Real transaction.",
+    schema: {
+      token: z.string().describe("The launched token address to claim fees for."),
+      source: z.enum(["auto", "stream", "graduator"]).optional().describe("Where to claim from (default auto)."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const cfg = getChain(chainId);
+      const pc = publicClient(chainId);
+      const token = await getToken(chainId, args.token);
+      const source = args.source ?? "auto";
+      const targets: Array<[string, `0x${string}`]> =
+        source === "stream"
+          ? [["stream", getAddress(cfg.addresses.fireStream)]]
+          : source === "graduator"
+            ? [["graduator", getAddress(cfg.addresses.fireGraduator)]]
+            : [
+                ["graduator", getAddress(cfg.addresses.fireGraduator)],
+                ["stream", getAddress(cfg.addresses.fireStream)],
+              ];
+
+      const errors: string[] = [];
+      for (const [name, address] of targets) {
+        try {
+          const sim = await pc.simulateContract({
+            address,
+            abi: FIRE_STREAM_ABI,
+            functionName: "claimFees",
+            args: [token.address as `0x${string}`],
+            account: requireAccount(),
+          });
+          const wc = walletClient(chainId);
+          const hash = await wc.writeContract(sim.request);
+          const receipt = await pc.waitForTransactionReceipt({ hash });
+          return {
+            chainId,
+            action: "claim_fees",
+            source: name,
+            token: { address: token.address, symbol: token.symbol },
+            txHash: hash,
+            status: receipt.status,
+            explorer: `${cfg.explorerUrl}/tx/${hash}`,
+          };
+        } catch (e) {
+          errors.push(`${name}: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`);
+        }
+      }
+      throw new Error(`No claimable fees. ${errors.join(" | ")}`);
+    },
+  },
+  {
+    name: "release_vested",
+    description: "Release your vested creator token allocation for a launched token (calls releaseVested on the token contract). Real transaction.",
+    schema: {
+      token: z.string().describe("The launched token address (you must be the vesting beneficiary)."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const cfg = getChain(chainId);
+      const pc = publicClient(chainId);
+      const token = await getToken(chainId, args.token);
+      const addr = token.address as `0x${string}`;
+
+      const vested = (await pc.readContract({ address: addr, abi: FIRE_TOKEN_ABI, functionName: "vestedAmount" })) as bigint;
+      const released = (await pc.readContract({ address: addr, abi: FIRE_TOKEN_ABI, functionName: "vestingReleased" })) as bigint;
+      const releasable = vested > released ? vested - released : 0n;
+      if (releasable === 0n) throw new Error(`Nothing vested to release yet (vested=${formatUnits(vested, token.decimals)}, released=${formatUnits(released, token.decimals)}).`);
+
+      const sim = await pc.simulateContract({ address: addr, abi: FIRE_TOKEN_ABI, functionName: "releaseVested", account: requireAccount() });
+      const wc = walletClient(chainId);
+      const hash = await wc.writeContract(sim.request);
+      const receipt = await pc.waitForTransactionReceipt({ hash });
+      return {
+        chainId,
+        action: "release_vested",
+        token: { address: token.address, symbol: token.symbol },
+        released: `${formatUnits(releasable, token.decimals)} ${token.symbol}`,
+        txHash: hash,
+        status: receipt.status,
+        explorer: `${cfg.explorerUrl}/tx/${hash}`,
       };
     },
   },

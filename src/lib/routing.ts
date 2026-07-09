@@ -2,11 +2,12 @@
 // endpoint (avoids on-chain enumeration/rate-limits), then quote each route via
 // QuoterV2. Mirrors the frontend's routing pipeline, headless.
 import { Token, CurrencyAmount, TradeType } from "@kumbaya_xyz/sdk-core";
-import { Pool, Route, encodeRouteToPath } from "@kumbaya_xyz/v3-sdk";
+import { Pool, Route, encodeRouteToPath, computePoolAddress } from "@kumbaya_xyz/v3-sdk";
+import { getAddress } from "viem";
 import { EXCHANGE_API_URL, type ChainId, getChain } from "../config/chains.js";
 import { getToken } from "./tokens.js";
 import { publicClient } from "../clients.js";
-import { QUOTER_V2_ABI } from "./abis.js";
+import { QUOTER_V2_ABI, UNIV3_POOL_ABI } from "./abis.js";
 
 interface AdmittedPool {
   address: string;
@@ -20,6 +21,49 @@ interface AdmittedPool {
 
 const MAX_HOPS = 3;
 const MAX_ROUTES = 24; // cap QuoterV2 calls
+const FEE_TIERS = [100, 500, 3000, 10000];
+
+/**
+ * On-chain fallback for pools the public indexer hasn't admitted yet (e.g. a
+ * token created seconds ago). Probes direct + via-WETH pairs across fee tiers.
+ */
+async function probeOnChainPools(chainId: ChainId, tIn: Token, tOut: Token): Promise<Pool[]> {
+  const cfg = getChain(chainId);
+  const pc = publicClient(chainId);
+  const weth = await getToken(chainId, cfg.addresses.weth9);
+  const pairs: Array<[Token, Token]> = [[tIn, tOut]];
+  if (!tIn.equals(weth) && !tOut.equals(weth)) {
+    pairs.push([tIn, weth], [tOut, weth]);
+  }
+
+  const candidates: Array<{ token0: Token; token1: Token; fee: number; address: `0x${string}` }> = [];
+  const seen = new Set<string>();
+  for (const [a, b] of pairs) {
+    const [t0, t1] = a.sortsBefore(b) ? [a, b] : [b, a];
+    for (const fee of FEE_TIERS) {
+      const address = computePoolAddress({ factoryAddress: cfg.addresses.factory, tokenA: t0, tokenB: t1, fee, chainId }) as `0x${string}`;
+      if (seen.has(address)) continue;
+      seen.add(address);
+      candidates.push({ token0: t0, token1: t1, fee, address });
+    }
+  }
+
+  const states = await Promise.all(
+    candidates.map(async (c) => {
+      try {
+        const [slot0, liquidity] = (await Promise.all([
+          pc.readContract({ address: c.address, abi: UNIV3_POOL_ABI, functionName: "slot0" }),
+          pc.readContract({ address: c.address, abi: UNIV3_POOL_ABI, functionName: "liquidity" }),
+        ])) as [readonly unknown[], bigint];
+        if (liquidity === 0n) return null;
+        return new Pool(c.token0, c.token1, c.fee, (slot0[0] as bigint).toString(), liquidity.toString(), Number(slot0[1] as number | bigint));
+      } catch {
+        return null;
+      }
+    })
+  );
+  return states.filter((p): p is Pool => p !== null);
+}
 
 export async function fetchAdmittedPools(
   chainId: ChainId,
@@ -98,10 +142,19 @@ export async function quoteBest(params: {
 }): Promise<QuoteResult> {
   const { chainId, tokenIn, tokenOut, amount, tradeType } = params;
   const [tIn, tOut] = await Promise.all([getToken(chainId, tokenIn), getToken(chainId, tokenOut)]);
-  const admitted = await fetchAdmittedPools(chainId, tIn.address, tOut.address);
-  if (admitted.length === 0) throw new Error("No admitted pools for this pair.");
-  const pools = await buildPools(chainId, admitted);
-  const routes = enumerateRoutes(pools, tIn, tOut);
+  const admitted = await fetchAdmittedPools(chainId, tIn.address, tOut.address).catch(() => []);
+  let pools = await buildPools(chainId, admitted);
+  let routes = enumerateRoutes(pools, tIn, tOut);
+  if (routes.length === 0) {
+    // Fallback: the indexer may not have admitted the pool yet (freshly launched
+    // token). Probe direct + via-WETH pairs on-chain and merge.
+    const probed = await probeOnChainPools(chainId, tIn, tOut);
+    const key = (p: Pool) => `${p.token0.address}-${p.token1.address}-${p.fee}`;
+    const merged = new Map(pools.map((p) => [key(p), p]));
+    for (const p of probed) merged.set(key(p), p);
+    pools = [...merged.values()];
+    routes = enumerateRoutes(pools, tIn, tOut);
+  }
   if (routes.length === 0) throw new Error("No route found between these tokens.");
 
   const pc = publicClient(chainId);

@@ -88,3 +88,21 @@ export const FUEL_VAULT_ABI = [
   { type: "function", name: "graduated", stateMutability: "view", inputs: [{ name: "token", type: "address" }], outputs: [{ type: "bool" }] },
   { type: "function", name: "withdraw", stateMutability: "nonpayable", inputs: [{ name: "token", type: "address" }], outputs: [] },
 ] as const;
+
+// FireStream / FireGraduator: claim streamed trading fees for a launched token.
+export const FIRE_STREAM_ABI = [
+  { type: "function", name: "claimFees", stateMutability: "nonpayable", inputs: [{ name: "token", type: "address" }], outputs: [] },
+] as const;
+
+// FireToken: creator vesting lives on the token contract itself.
+export const FIRE_TOKEN_ABI = [
+  { type: "function", name: "releaseVested", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { type: "function", name: "vestedAmount", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "unvestedAmount", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "vestingReleased", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "vestingTotal", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "vestingBeneficiary", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  { type: "function", name: "vestingStart", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "vestingDuration", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "vestingComplete", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+] as const;
