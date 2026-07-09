@@ -17,6 +17,9 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Kumbaya-xyz/kumbaya-agent-kit.git",
