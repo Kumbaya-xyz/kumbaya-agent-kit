@@ -6,7 +6,7 @@ import { publicClient, account } from "../clients.js";
 import { DEFAULT_CHAIN_ID, getChain, type ChainId } from "../config/chains.js";
 import { getToken } from "../lib/tokens.js";
 import { quoteBest } from "../lib/routing.js";
-import { UNIV3_POOL_ABI, NPM_ABI, FUEL_VAULT_ABI } from "../lib/abis.js";
+import { UNIV3_POOL_ABI, NPM_ABI, FUEL_VAULT_ABI, FIRE_TOKEN_ABI } from "../lib/abis.js";
 import type { ToolDef } from "./registry.js";
 
 const chainArg = z
@@ -305,6 +305,49 @@ export const readTools: ToolDef[] = [
           withdrawable: unlocked ? formatUnits(liquid, token.decimals) : "0",
         },
       };
+    },
+  },
+  {
+    name: "get_vesting",
+    description:
+      "Creator vesting schedule for a launched Fire token: total, vested-so-far, already-released, and releasable-now (all in token units). Reads the token contract directly.",
+    schema: {
+      token: z.string().describe("The launched Fire token address."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const token = await getToken(chainId, args.token);
+      const addr = token.address as `0x${string}`;
+      const pc = publicClient(chainId);
+      const read = (fn: string) =>
+        pc.readContract({ address: addr, abi: FIRE_TOKEN_ABI, functionName: fn as never });
+      try {
+        const [total, vested, released, beneficiary, complete, start, duration] = (await Promise.all([
+          read("vestingTotal"),
+          read("vestedAmount"),
+          read("vestingReleased"),
+          read("vestingBeneficiary"),
+          read("vestingComplete"),
+          read("vestingStart"),
+          read("vestingDuration"),
+        ])) as [bigint, bigint, bigint, string, boolean, bigint, bigint];
+        const releasable = vested > released ? vested - released : 0n;
+        return {
+          chainId,
+          token: { address: token.address, symbol: token.symbol, decimals: token.decimals },
+          beneficiary,
+          complete,
+          startUnix: Number(start),
+          durationSecs: Number(duration),
+          total: formatUnits(total, token.decimals),
+          vested: formatUnits(vested, token.decimals),
+          released: formatUnits(released, token.decimals),
+          releasableNow: formatUnits(releasable, token.decimals),
+        };
+      } catch {
+        return { chainId, token: { address: token.address, symbol: token.symbol }, error: "Not a Fire token with vesting, or vesting getters unavailable." };
+      }
     },
   },
 ];
