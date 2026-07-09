@@ -94,6 +94,15 @@ export const DEFAULT_CHAIN_ID: ChainId = (Number(process.env.CHAIN_ID) as ChainI
 export const EXCHANGE_API_URL =
   process.env.KUMBAYA_EXCHANGE_URL?.replace(/\/$/, "") || "https://exchange.kumbaya.xyz";
 
+// Client API base, used only for SIWE wallet auth (minting a session the wallet
+// owns). The resulting JWT is handed to kumbaya-mcp for API calls.
+export const CLIENT_API_URL =
+  process.env.KUMBAYA_CLIENT_URL?.replace(/\/$/, "") || "https://clients.kumbaya.xyz";
+
+// Optional path shared with kumbaya-mcp (KUMBAYA_JWT_FILE): siwe_login writes the
+// session token here so the API MCP picks it up on its next request.
+export const JWT_FILE = process.env.KUMBAYA_JWT_FILE || "";
+
 export function getChain(chainId: ChainId): ChainConfig {
   const c = CHAINS[chainId];
   if (!c) throw new Error(`Unsupported chainId ${chainId}. Use 4326 (mainnet) or 6343 (testnet).`);

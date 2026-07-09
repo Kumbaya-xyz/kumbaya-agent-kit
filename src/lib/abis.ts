@@ -87,6 +87,7 @@ export const FUEL_VAULT_ABI = [
   { type: "function", name: "getUnclaimedCredits", stateMutability: "view", inputs: [{ name: "token", type: "address" }], outputs: [{ type: "uint256" }] },
   { type: "function", name: "graduated", stateMutability: "view", inputs: [{ name: "token", type: "address" }], outputs: [{ type: "bool" }] },
   { type: "function", name: "withdraw", stateMutability: "nonpayable", inputs: [{ name: "token", type: "address" }], outputs: [] },
+  { type: "function", name: "depositFrom", stateMutability: "nonpayable", inputs: [{ name: "beneficiary", type: "address" }, { name: "token", type: "address" }, { name: "amount", type: "uint256" }], outputs: [] },
 ] as const;
 
 // FireStream / FireGraduator: claim streamed trading fees for a launched token.

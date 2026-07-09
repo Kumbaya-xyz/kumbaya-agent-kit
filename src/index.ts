@@ -1,15 +1,17 @@
 #!/usr/bin/env node
-// Kumbaya on-chain MCP for MegaETH: swap, liquidity, token launch (Fire), tips, and reads.
-// Signs with a wallet key you control (WALLET_PRIVATE_KEY). Testnet-first by default.
+// Kumbaya on-chain MCP for MegaETH: swap, liquidity, token launch (Fire), reads,
+// plus wallet auth/signing. Signs with a wallet key you control (WALLET_PRIVATE_KEY).
+// Testnet-first by default.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ok, type ToolDef } from "./tools/registry.js";
 import { readTools } from "./tools/reads.js";
 import { writeTools } from "./tools/writes.js";
+import { walletTools } from "./tools/wallet.js";
 
 const server = new McpServer({ name: "kumbaya-onchain-mcp", version: "0.1.0" });
 
-const allTools: ToolDef[] = [...readTools, ...writeTools];
+const allTools: ToolDef[] = [...readTools, ...writeTools, ...walletTools];
 
 for (const t of allTools) {
   server.tool(t.name, t.description, t.schema, async (args: unknown) => {

@@ -14,7 +14,7 @@
     "dev": "tsup src/index.ts --format esm --watch",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/reads.test.ts test/mcp.test.ts",
-    "test:write": "node --env-file=.env --import tsx --test test/writes.test.ts"
+    "test:write": "node --env-file=.env --import tsx --test --test-concurrency=1 test/writes.test.ts test/wallet.test.ts"
   },
   "license": "MIT",
   "publishConfig": {
