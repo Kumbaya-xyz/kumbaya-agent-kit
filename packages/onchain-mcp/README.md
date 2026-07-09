@@ -16,11 +16,18 @@ npx @kumbaya_xyz/onchain-mcp
 
 ## Configuration
 
+Signing works one of two ways: a local key for a single wallet, or a remote signer so the process holds no key (recommended for agent fleets — see `@kumbaya_xyz/onchain-signer`).
+
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `WALLET_PRIVATE_KEY` | for writes | Hex private key used to sign transactions. Reads work without it. |
+| `WALLET_PRIVATE_KEY` | local mode | Hex private key used to sign transactions. Reads work without it. |
+| `SIGNER_URL` | remote mode | Base URL of the signing service. When set, the process holds no key and delegates signing. |
+| `SIGNER_TOKEN` | remote mode | This agent's bearer token at the signer. |
+| `SIGNER_ADDRESS` | remote mode | This agent's public address (the signer holds the key). |
 | `CHAIN_ID` | no | Default chain: `6343` (MegaETH testnet, default) or `4326` (mainnet). Each tool also accepts an optional `chainId`. |
 | `KUMBAYA_EXCHANGE_URL` | no | Override the exchange API used for pool discovery during routing. |
+
+Remote mode lets many agents share one signer while each signs as its own identity, keeping raw keys out of every agent process.
 
 Register with an MCP client (Claude Desktop example):
 

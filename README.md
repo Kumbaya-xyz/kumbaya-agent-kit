@@ -6,8 +6,9 @@ Everything an agent needs to act on Kumbaya (MegaETH): two MCP servers and a por
 
 ```
 packages/
-  onchain-mcp/   @kumbaya_xyz/onchain-mcp   the wallet — signs and sends on-chain transactions
-  api-mcp/       @kumbaya_xyz/kumbaya-mcp    the app — JWT-authenticated API access
+  onchain-mcp/   @kumbaya_xyz/onchain-mcp     the wallet — builds and broadcasts on-chain transactions
+  api-mcp/       @kumbaya_xyz/kumbaya-mcp      the app — JWT-authenticated API access
+  signer/        @kumbaya_xyz/onchain-signer   holds keys server-side; signs per-agent requests
 skills/          portable SKILL.md files, one per activity
 ```
 
@@ -20,6 +21,10 @@ skills/          portable SKILL.md files, one per activity
 | Built from | contract calldata + `@kumbaya_xyz` SDKs | the Kumbaya OpenAPI specs |
 
 The key lives in exactly one small, auditable server. The API server never sees it.
+
+## Signing for agent fleets
+
+For a single wallet, onchain-mcp holds the key directly (`WALLET_PRIVATE_KEY`). For many agents in one framework, run the **signer** instead: it holds every agent's key server-side and signs token-authenticated requests, so no agent process holds a raw key. Each agent points at the shared signer with its own `SIGNER_URL` + `SIGNER_TOKEN` + `SIGNER_ADDRESS` and signs as its own identity. The signer also enforces per-agent policy (allowed chains, value caps, recipient allowlists).
 
 ## Auth bridge
 
