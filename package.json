@@ -1,0 +1,13 @@
+{
+  "name": "kumbaya-agent-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent toolkit for Kumbaya on MegaETH: two MCP servers (on-chain wallet + app API) and a portable skill pack.",
+  "packageManager": "pnpm@10.22.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "license": "MIT"
+}
