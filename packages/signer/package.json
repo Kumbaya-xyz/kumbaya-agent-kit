@@ -17,6 +17,12 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kumbaya-xyz/kumbaya-agent-kit.git",
+    "directory": "packages/signer"
+  },
+  "homepage": "https://github.com/Kumbaya-xyz/kumbaya-agent-kit/tree/main/packages/signer#readme",
   "engines": {
     "node": ">=18"
   },

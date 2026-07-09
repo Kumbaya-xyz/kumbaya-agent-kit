@@ -17,6 +17,12 @@
     "test:write": "node --env-file=.env --import tsx --test --test-concurrency=1 test/writes.test.ts test/wallet.test.ts test/signer.test.ts"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kumbaya-xyz/kumbaya-agent-kit.git",
+    "directory": "packages/onchain-mcp"
+  },
+  "homepage": "https://github.com/Kumbaya-xyz/kumbaya-agent-kit/tree/main/packages/onchain-mcp#readme",
   "publishConfig": {
     "access": "public"
   },

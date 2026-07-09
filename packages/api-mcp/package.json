@@ -44,12 +44,13 @@
   "author": "Kumbaya",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Kumbaya-xyz/kumbaya-mcp.git"
+    "url": "git+https://github.com/Kumbaya-xyz/kumbaya-agent-kit.git",
+    "directory": "packages/api-mcp"
   },
   "bugs": {
-    "url": "https://github.com/Kumbaya-xyz/kumbaya-mcp/issues"
+    "url": "https://github.com/Kumbaya-xyz/kumbaya-agent-kit/issues"
   },
-  "homepage": "https://github.com/Kumbaya-xyz/kumbaya-mcp#readme",
+  "homepage": "https://github.com/Kumbaya-xyz/kumbaya-agent-kit/tree/main/packages/api-mcp#readme",
   "publishConfig": {
     "access": "public"
   }
