@@ -94,10 +94,6 @@ export const DEFAULT_CHAIN_ID: ChainId = (Number(process.env.CHAIN_ID) as ChainI
 export const EXCHANGE_API_URL =
   process.env.KUMBAYA_EXCHANGE_URL?.replace(/\/$/, "") || "https://exchange.kumbaya.xyz";
 
-// Client API base (for the tip prepare/submit flow — needs a wallet-minted JWT).
-export const CLIENT_API_URL =
-  process.env.KUMBAYA_CLIENT_URL?.replace(/\/$/, "") || "https://clients.kumbaya.xyz";
-
 export function getChain(chainId: ChainId): ChainConfig {
   const c = CHAINS[chainId];
   if (!c) throw new Error(`Unsupported chainId ${chainId}. Use 4326 (mainnet) or 6343 (testnet).`);
