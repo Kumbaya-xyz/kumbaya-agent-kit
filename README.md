@@ -51,12 +51,21 @@ Authenticated app actions need a session the wallet owns:
 
 The `skills/` pack turns tools into procedures — including cross-server ones like tipping. Drop them into an agent that supports skills (Claude Code, hermes, etc.).
 
+**Activities** — one procedure each:
+
 - `kumbaya` — overview + which server to use.
 - `kumbaya-trade` — quote and swap.
 - `kumbaya-liquidity` — provide/adjust/collect liquidity.
 - `kumbaya-launch` — launch a token on the Fire bonding curve.
 - `kumbaya-tip` — tip a creator on a comment (spans both servers).
 - `kumbaya-earn` — claim fees, withdraw tips, release vested allocation.
+
+**Personas** — quick-launch bundles that group the activities above and scope the servers/credentials for a role. Each trims `KUMBAYA_MCP_SERVICES` to only what the role needs, so the model sees a smaller, sharper tool set:
+
+- `kumbaya-trader` — swap + liquidity. Wallet + `exchange,search`, no JWT.
+- `kumbaya-creator` — launch, promote, collect earnings. Wallet + `client,exchange` + JWT.
+- `kumbaya-contributor` — comment + tip. Wallet + `client,search` + JWT.
+- `kumbaya-observer` — read-only research/analytics. No key, no JWT.
 
 ## Quick start
 
