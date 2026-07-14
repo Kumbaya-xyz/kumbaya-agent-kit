@@ -29,10 +29,21 @@ Run `siwe_login` once before any `app_*` call that requires auth.
 
 MegaETH testnet `6343` (default) and mainnet `4326`. Every onchain-mcp tool takes an optional `chainId`.
 
+## Quick start by persona
+
+If you just want a role-scoped setup (which servers, which tools, which credentials), start from a persona bundle instead of wiring skills by hand:
+
+- `kumbaya-trader` — swap and provide liquidity. Wallet + `exchange,search`. No JWT.
+- `kumbaya-creator` — launch, promote, and collect earnings. Wallet + `client,exchange` + JWT.
+- `kumbaya-contributor` — comment and tip creators. Wallet + `client,search` + JWT.
+- `kumbaya-observer` — read-only research/analytics. No key, no JWT.
+
+Each persona trims `KUMBAYA_MCP_SERVICES` to only what the role needs, so the model sees a smaller, sharper tool set.
+
 ## Activity skills
 
 - `kumbaya-trade` — quote and swap tokens.
 - `kumbaya-liquidity` — provide, adjust, and collect Uniswap V3 liquidity.
-- `kumbaya-launch` — launch a token on the Fire bonding curve.
+- `kumbaya-launch` — launch a token on the bonding curve.
 - `kumbaya-tip` — tip a creator on a comment (spans both servers).
 - `kumbaya-earn` — claim fees, withdraw tips, release vested allocation.
