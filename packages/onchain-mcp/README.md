@@ -26,6 +26,7 @@ Signing works one of two ways: a local key for a single wallet, or a remote sign
 | `SIGNER_ADDRESS` | no | This agent's public address. Derived from the signer's `/v1/address` when omitted. |
 | `CHAIN_ID` | no | Default chain: `6343` (MegaETH testnet, default) or `4326` (mainnet). Each tool also accepts an optional `chainId`. |
 | `KUMBAYA_EXCHANGE_URL` | no | Override the exchange API used for pool discovery during routing. |
+| `KUMBAYA_TOKEN_ALLOWLIST` | no | Set to `off` to disable the token allowlist and operate on any token. Defaults to on. |
 | `KUMBAYA_SEARCH_URL` | no | Override the search API used to classify tokens as launchpad, bluechip, or verified. |
 | `KUMBAYA_BLOCKSCOUT_4326` | no | Override the mainnet block explorer used to discover an address's token holdings. |
 | `KUMBAYA_BLOCKSCOUT_6343` | no | Override the testnet block explorer used to discover an address's token holdings. |
@@ -104,7 +105,7 @@ Reads are validated against live testnet. Writes are validated with real testnet
 
 - The wallet key signs real transactions. Fund a dedicated key and start on testnet.
 - Swaps, liquidity, and launches move real value. Review each tool's inputs before running against mainnet.
-- `swap`, `add_liquidity`, and `deposit_credits` operate only on launchpad, bluechip, or verified tokens (per the Kumbaya token directory), plus a token launched in the same session. Unrecognized tokens are rejected.
+- `swap`, `add_liquidity`, and `deposit_credits` operate only on launchpad, bluechip, or verified tokens (per the Kumbaya token directory), plus a token launched in the same session. Unrecognized tokens are rejected. Set `KUMBAYA_TOKEN_ALLOWLIST=off` to operate on any token.
 
 ## License
 

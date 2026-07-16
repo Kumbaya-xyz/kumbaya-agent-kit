@@ -59,6 +59,7 @@ export async function isAllowedToken(chainId: ChainId, token: string): Promise<b
 }
 
 export async function assertAllowedToken(chainId: ChainId, token: string, label = "token"): Promise<void> {
+  if (process.env.KUMBAYA_TOKEN_ALLOWLIST === "off") return; // opt-out: allow any token
   let allowed = false;
   try {
     allowed = await isAllowedToken(chainId, token);

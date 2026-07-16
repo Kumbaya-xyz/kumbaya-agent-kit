@@ -57,3 +57,13 @@ test("fails closed when the search service is unreachable", async () => {
   stubDown();
   await assert.rejects(() => assertAllowedToken(4326, OUTAGE, "token"), /Could not verify/);
 });
+
+test("KUMBAYA_TOKEN_ALLOWLIST=off allows any token, no registry call", async () => {
+  stubDown(); // registry unreachable — must not matter when the guard is off
+  process.env.KUMBAYA_TOKEN_ALLOWLIST = "off";
+  try {
+    await assert.doesNotReject(() => assertAllowedToken(6343, UNKNOWN, "token"));
+  } finally {
+    delete process.env.KUMBAYA_TOKEN_ALLOWLIST;
+  }
+});
