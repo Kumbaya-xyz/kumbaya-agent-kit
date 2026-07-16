@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getAddress } from "viem";
-import { loadKeystore, type AgentEntry, type Policy } from "./keystore.js";
+import { loadKeystore, type AgentEntry, type Policy, type TypedDataRule } from "./keystore.js";
 
 const BIGINT_TX_FIELDS = ["value", "gas", "gasPrice", "maxFeePerGas", "maxPriorityFeePerGas", "maxFeePerBlobGas"] as const;
 
@@ -38,6 +38,40 @@ function checkPolicy(policy: Policy | undefined, tx: Record<string, unknown>): s
   return null;
 }
 
+// Default-on: typed-data signing is only ever used for FuelVault gifting (swaps use
+// on-chain approve, SIWE uses sign/message). So with no explicit policy we allow ONLY
+// the FuelVault GiftPermit and reject everything else — which blocks the real risk, an
+// arbitrary Permit2/EIP-2612 drain permit. Matched on domain name+version, so it's
+// address/redeploy-agnostic. An explicit allowTypedData in the keystore overrides this.
+const DEFAULT_TYPED_DATA_ALLOWLIST: TypedDataRule[] = [{ primaryType: "GiftPermit", name: "FuelVault", version: "1" }];
+
+/** Gate /v1/sign/typed-data. A signed permit authorizes a token move, so the request
+ *  must match one allowlist rule (every set field). Falls back to the FuelVault
+ *  GiftPermit default when a keystore entry sets no explicit allowTypedData. */
+function checkTypedDataPolicy(policy: Policy | undefined, td: Record<string, unknown>): string | null {
+  const rules = policy?.allowTypedData ?? DEFAULT_TYPED_DATA_ALLOWLIST;
+  const domain = (td.domain ?? {}) as Record<string, unknown>;
+  const message = (td.message ?? {}) as Record<string, unknown>;
+  const name = String(domain.name ?? "");
+  const version = String(domain.version ?? "");
+  const vc = String(domain.verifyingContract ?? "").toLowerCase();
+  const cid = domain.chainId != null ? Number(domain.chainId) : undefined;
+  const primaryType = String(td.primaryType ?? "");
+  const matched = rules.some((r) => {
+    if (r.primaryType && r.primaryType !== primaryType) return false;
+    if (r.name && r.name !== name) return false;
+    if (r.version && r.version !== version) return false;
+    if (r.verifyingContract && r.verifyingContract.toLowerCase() !== vc) return false;
+    if (r.chainId != null && r.chainId !== cid) return false;
+    if (r.spenderField) {
+      const spender = String(message[r.spenderField] ?? "").toLowerCase();
+      if (!(r.allowSpenders ?? []).map((s) => s.toLowerCase()).includes(spender)) return false;
+    }
+    return true;
+  });
+  return matched ? null : `typed-data not allowlisted (primaryType=${primaryType || "?"}, domain=${name || "?"}/${version || "?"})`;
+}
+
 export function createApp(keystore = loadKeystore()) {
   const app = new Hono();
 
@@ -71,6 +105,8 @@ export function createApp(keystore = loadKeystore()) {
     const entry = auth(c);
     if (!entry) return c.json({ error: "unauthorized" }, 401);
     const { typedData } = (await c.req.json()) as { typedData: Record<string, unknown> };
+    const denied = checkTypedDataPolicy(entry.policy, typedData);
+    if (denied) return c.json({ error: `policy: ${denied}` }, 403);
     const signature = await entry.account.signTypedData!(coerceTypedData(typedData as never) as never);
     return c.json({ signature });
   });

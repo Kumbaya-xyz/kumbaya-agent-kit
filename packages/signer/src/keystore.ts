@@ -2,10 +2,24 @@ import { readFileSync } from "node:fs";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Account } from "viem";
 
+// One allowed EIP-712 shape for /v1/sign/typed-data. A signing request must match
+// at least one rule (all set fields must match) or it is rejected. Use it to pin
+// signing to known permits (e.g. the GiftPermit domain, or Permit2 with a known spender).
+export interface TypedDataRule {
+  primaryType?: string; // exact match on the EIP-712 primaryType
+  name?: string; // exact match on domain.name (e.g. "FuelVault")
+  version?: string; // exact match on domain.version
+  verifyingContract?: string; // exact match (lowercased) on domain.verifyingContract
+  chainId?: number; // exact match on domain.chainId
+  spenderField?: string; // name of the message field holding the spender/operator
+  allowSpenders?: string[]; // if spenderField set, message[spenderField] must be in this list (lowercased)
+}
+
 export interface Policy {
   maxValueWei?: string; // reject a tx sending more native value than this
   allowTo?: string[]; // if set, tx `to` must be in this list (lowercased)
   allowChains?: number[]; // if set, chainId must be in this list
+  allowTypedData?: TypedDataRule[]; // if set, /v1/sign/typed-data must match one rule
 }
 
 export interface AgentEntry {
