@@ -8,6 +8,7 @@ import { ok, type ToolDef } from "./tools/registry.js";
 import { readTools } from "./tools/reads.js";
 import { writeTools } from "./tools/writes.js";
 import { walletTools } from "./tools/wallet.js";
+import { initWallet } from "./remoteAccount.js";
 
 const server = new McpServer({ name: "kumbaya-onchain-mcp", version: "0.1.0" });
 
@@ -23,6 +24,10 @@ for (const t of allTools) {
     }
   });
 }
+
+// Resolve the wallet address (from the signer's /v1/address) before serving, so a
+// keyless agent that sets only SIGNER_URL + SIGNER_TOKEN knows who it is.
+await initWallet();
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
