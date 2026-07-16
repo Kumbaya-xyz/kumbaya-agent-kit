@@ -14,6 +14,7 @@
     "dev": "tsup src/index.ts --format esm --watch",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/reads.test.ts test/mcp.test.ts",
+    "test:unit": "tsx --test --test-concurrency=1 test/tokenAllowlist.test.ts test/balances.test.ts test/tokenStatus.test.ts test/remoteAccount.test.ts",
     "test:write": "node --env-file=.env --import tsx --test --test-concurrency=1 test/writes.test.ts test/wallet.test.ts test/signer.test.ts"
   },
   "license": "MIT",

@@ -94,6 +94,11 @@ export const DEFAULT_CHAIN_ID: ChainId = (Number(process.env.CHAIN_ID) as ChainI
 export const EXCHANGE_API_URL =
   process.env.KUMBAYA_EXCHANGE_URL?.replace(/\/$/, "") || "https://exchange.kumbaya.xyz";
 
+// Search API base: keyless token directory with a `visibility=trusted` filter
+// (bluechip + verified + fire/launchpad). Source for the on-chain token allowlist.
+export const SEARCH_API_URL =
+  process.env.KUMBAYA_SEARCH_URL?.replace(/\/$/, "") || "https://search.kumbaya.xyz";
+
 // Client API base, used only for SIWE wallet auth (minting a session the wallet
 // owns). The resulting JWT is handed to kumbaya-mcp for API calls.
 export const CLIENT_API_URL =

@@ -2,9 +2,11 @@ import { z } from "zod";
 import { formatEther, formatUnits, parseUnits, erc20Abi, isAddress } from "viem";
 import { computePoolAddress, Pool, Position } from "@kumbaya_xyz/v3-sdk";
 import { TradeType } from "@kumbaya_xyz/sdk-core";
-import { publicClient, account } from "../clients.js";
+import { publicClient, account, requireAccount } from "../clients.js";
 import { DEFAULT_CHAIN_ID, getChain, type ChainId } from "../config/chains.js";
 import { getToken } from "../lib/tokens.js";
+import { listBalances } from "../lib/balances.js";
+import { tokenStatus } from "../lib/tokenStatus.js";
 import { quoteBest } from "../lib/routing.js";
 import { UNIV3_POOL_ABI, NPM_ABI, FUEL_VAULT_ABI, FIRE_TOKEN_ABI } from "../lib/abis.js";
 import type { ToolDef } from "./registry.js";
@@ -16,6 +18,53 @@ const chainArg = z
   .describe("Chain id: 4326 (MegaETH mainnet) or 6343 (testnet). Defaults to testnet.");
 
 export const readTools: ToolDef[] = [
+  {
+    name: "get_address",
+    description:
+      "Your own wallet address — the account the signer holds for you. The reads that take an " +
+      "address (balance, positions, tips, vesting) default to it, so you rarely need to pass it.",
+    schema: {},
+    handler: async () => ({ address: requireAccount().address }),
+  },
+  {
+    name: "list_balances",
+    description:
+      "All ERC-20 balances for an address (defaults to your wallet) plus ETH. Discovers which " +
+      "tokens the wallet holds via the block explorer, then verifies every balance on-chain " +
+      "(explorer data can lag, so it is used only for discovery). Pass `tokens` to force-include " +
+      "specific addresses you know about, e.g. a token you just bought or launched.",
+    schema: {
+      address: z.string().optional().describe("Address to check. Defaults to your wallet."),
+      tokens: z.array(z.string()).optional().describe("Extra token addresses to include beyond explorer discovery."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const addr = args.address || account()?.address;
+      if (!addr) throw new Error("No address provided and no wallet configured.");
+      return listBalances(chainId, addr, args.tokens ?? []);
+    },
+  },
+  {
+    name: "token_status",
+    description:
+      "Your complete on-chain stake in one token, plus a disposal verdict for pruning it from " +
+      "memory. Aggregates wallet balance, tip credits, creator tip earnings (liquid + locked/vested), " +
+      "liquidity positions, and creator vesting. `isCreator` = you launched it (keep forever). " +
+      "`isDisposable` = safe to forget: not launched by you, and every balance is zero. Call this " +
+      "before removing a token from memory; never forget a token where isDisposable is false.",
+    schema: {
+      token: z.string().describe("The token address to check."),
+      address: z.string().optional().describe("Wallet to check. Defaults to your wallet."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const owner = args.address || account()?.address;
+      if (!owner) throw new Error("No address provided and no wallet configured.");
+      return tokenStatus(chainId, owner, args.token);
+    },
+  },
   {
     name: "get_balance",
     description:

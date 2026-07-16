@@ -3,6 +3,8 @@ import { parseUnits, formatUnits, erc20Abi, getAddress } from "viem";
 import { publicClient, walletClient, requireAccount } from "../clients.js";
 import { DEFAULT_CHAIN_ID, getChain, type ChainId } from "../config/chains.js";
 import { getToken } from "../lib/tokens.js";
+import { assertAllowedToken } from "../lib/tokenAllowlist.js";
+import { noteInteracted } from "../lib/balances.js";
 import { siweLogin } from "../lib/clientApi.js";
 import { FUEL_VAULT_ABI } from "../lib/abis.js";
 import type { ToolDef } from "./registry.js";
@@ -88,6 +90,8 @@ export const walletTools: ToolDef[] = [
     },
     handler: async (args) => {
       const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      await assertAllowedToken(chainId, args.token, "token");
+      noteInteracted(chainId, args.token);
       const cfg = getChain(chainId);
       const pc = publicClient(chainId);
       const wc = walletClient(chainId);

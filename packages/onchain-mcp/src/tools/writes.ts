@@ -13,6 +13,8 @@ import {
   decodeEventLog,
   getContractAddress,
 } from "viem";
+import { assertAllowedToken, markSelfLaunched } from "../lib/tokenAllowlist.js";
+import { noteInteracted } from "../lib/balances.js";
 import { Ether, CurrencyAmount, Percent, TradeType, type Currency } from "@kumbaya_xyz/sdk-core";
 import {
   Route,
@@ -136,6 +138,12 @@ export const writeTools: ToolDef[] = [
       const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
       if (Boolean(args.amountIn) === Boolean(args.amountOut))
         throw new Error("Provide exactly one of amountIn or amountOut.");
+      await Promise.all([
+        assertAllowedToken(chainId, args.tokenIn, "tokenIn"),
+        assertAllowedToken(chainId, args.tokenOut, "tokenOut"),
+      ]);
+      noteInteracted(chainId, args.tokenIn);
+      noteInteracted(chainId, args.tokenOut);
       const cfg = getChain(chainId);
       const [tIn, tOut] = await Promise.all([getToken(chainId, args.tokenIn), getToken(chainId, args.tokenOut)]);
       const exactIn = Boolean(args.amountIn);
@@ -221,6 +229,12 @@ export const writeTools: ToolDef[] = [
     },
     handler: async (args) => {
       const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      await Promise.all([
+        assertAllowedToken(chainId, args.tokenA, "tokenA"),
+        assertAllowedToken(chainId, args.tokenB, "tokenB"),
+      ]);
+      noteInteracted(chainId, args.tokenA);
+      noteInteracted(chainId, args.tokenB);
       const cfg = getChain(chainId);
       const npm = getAddress(cfg.addresses.positionManager);
       const fee = args.fee;
@@ -504,6 +518,8 @@ export const writeTools: ToolDef[] = [
           /* not our event */
         }
       }
+      // Allow the just-launched token in swap/add_liquidity before it is indexed.
+      markSelfLaunched(chainId, token ?? predicted);
 
       return {
         chainId,
