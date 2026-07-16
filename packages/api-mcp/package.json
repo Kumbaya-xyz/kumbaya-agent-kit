@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --clean",
     "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
     "refresh-spec": "node scripts/refresh-spec.mjs",
     "audit": "tsx src/audit.ts",
