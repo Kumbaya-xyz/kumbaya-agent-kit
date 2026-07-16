@@ -1,6 +1,6 @@
 {
   "name": "@kumbaya_xyz/onchain-signer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Per-agent signing service for Kumbaya on-chain actions. Holds keys server-side; signs JWT/token-authenticated requests so agent processes never hold raw keys.",
   "type": "module",
   "bin": {

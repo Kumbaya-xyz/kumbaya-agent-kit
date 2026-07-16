@@ -1,6 +1,6 @@
 {
   "name": "@kumbaya_xyz/onchain-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for on-chain Kumbaya actions on MegaETH — swap, liquidity, token launch (Fire), tips, and reads. Signs with a wallet key you control.",
   "type": "module",
   "bin": {

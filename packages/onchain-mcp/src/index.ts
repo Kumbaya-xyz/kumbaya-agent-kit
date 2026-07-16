@@ -10,7 +10,7 @@ import { writeTools } from "./tools/writes.js";
 import { walletTools } from "./tools/wallet.js";
 import { initWallet } from "./remoteAccount.js";
 
-const server = new McpServer({ name: "kumbaya-onchain-mcp", version: "0.1.0" });
+const server = new McpServer({ name: "kumbaya-onchain-mcp", version: "0.2.0" });
 
 const allTools: ToolDef[] = [...readTools, ...writeTools, ...walletTools];
 
