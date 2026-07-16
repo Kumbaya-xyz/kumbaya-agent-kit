@@ -9,7 +9,7 @@ Pairs with `@kumbaya_xyz/onchain-mcp`: the MCP builds transactions and delegates
 - Each agent has a bearer **token**; the signer maps token → key.
 - The MCP sends the prepared transaction (or typed data / message) with the agent's token; the signer signs with that agent's key and returns the signature. The MCP broadcasts.
 - Raw keys live only in the signer. A leaked token is revocable/rotatable without touching the key.
-- Optional per-agent **policy**: allowed chains, a native-value cap, and a recipient allowlist.
+- Per-agent **policy**: allowed chains, a native-value cap, a recipient allowlist, and a typed-data allowlist. Typed-data signing defaults to the FuelVault GiftPermit only.
 
 ## Configuration
 
@@ -30,6 +30,8 @@ Keystore shape:
 }
 ```
 
+Policy fields are all optional: `allowChains`, `maxValueWei`, `allowTo`, and `allowTypedData` — a list of allowed EIP-712 shapes matched on `primaryType`/`name`/`version`/`verifyingContract`/`chainId`, each with an optional `spenderField` + `allowSpenders` list. When `allowTypedData` is unset, `/v1/sign/typed-data` signs only the FuelVault GiftPermit.
+
 ## Endpoints
 
 All require `Authorization: Bearer <token>`.
@@ -37,8 +39,8 @@ All require `Authorization: Bearer <token>`.
 | Method | Path | Body → Result |
 |--------|------|---------------|
 | GET | `/v1/address` | → `{ address, label }` |
-| POST | `/v1/sign/transaction` | `{ transaction }` → `{ signedTransaction }` |
-| POST | `/v1/sign/typed-data` | `{ typedData }` → `{ signature }` |
+| POST | `/v1/sign/transaction` | `{ transaction }` → `{ signedTransaction }` — policy-gated |
+| POST | `/v1/sign/typed-data` | `{ typedData }` → `{ signature }` — policy-gated (default: GiftPermit only) |
 | POST | `/v1/sign/message` | `{ message }` → `{ signature }` |
 | GET | `/health` | → `{ ok, agents }` |
 
@@ -50,7 +52,7 @@ Bigints are transported as hex strings and restored server-side.
 SIGNER_KEYS_FILE=./keys.json PORT=8787 npx @kumbaya_xyz/onchain-signer
 ```
 
-Point each agent's onchain-mcp at it with `SIGNER_URL`, `SIGNER_TOKEN`, and `SIGNER_ADDRESS`.
+Point each agent's onchain-mcp at it with `SIGNER_URL` and `SIGNER_TOKEN`. The address is derived from `/v1/address`; set `SIGNER_ADDRESS` to skip that lookup.
 
 ## Development
 

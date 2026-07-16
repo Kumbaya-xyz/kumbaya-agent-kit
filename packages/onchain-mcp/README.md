@@ -23,9 +23,12 @@ Signing works one of two ways: a local key for a single wallet, or a remote sign
 | `WALLET_PRIVATE_KEY` | local mode | Hex private key used to sign transactions. Reads work without it. |
 | `SIGNER_URL` | remote mode | Base URL of the signing service. When set, the process holds no key and delegates signing. |
 | `SIGNER_TOKEN` | remote mode | This agent's bearer token at the signer. |
-| `SIGNER_ADDRESS` | remote mode | This agent's public address (the signer holds the key). |
+| `SIGNER_ADDRESS` | no | This agent's public address. Derived from the signer's `/v1/address` when omitted. |
 | `CHAIN_ID` | no | Default chain: `6343` (MegaETH testnet, default) or `4326` (mainnet). Each tool also accepts an optional `chainId`. |
 | `KUMBAYA_EXCHANGE_URL` | no | Override the exchange API used for pool discovery during routing. |
+| `KUMBAYA_SEARCH_URL` | no | Override the search API used to classify tokens as launchpad, bluechip, or verified. |
+| `KUMBAYA_BLOCKSCOUT_4326` | no | Override the mainnet block explorer used to discover an address's token holdings. |
+| `KUMBAYA_BLOCKSCOUT_6343` | no | Override the testnet block explorer used to discover an address's token holdings. |
 
 Remote mode lets many agents share one signer while each signs as its own identity, keeping raw keys out of every agent process.
 
@@ -52,13 +55,16 @@ Register with an MCP client (Claude Desktop example):
 
 | Tool | Description |
 |------|-------------|
+| `get_address` | Your wallet address (the account the signer holds). |
 | `get_balance` | ETH and optional ERC-20 balance for an address. |
+| `list_balances` | All ERC-20 balances for an address plus ETH, discovered via the block explorer and verified on-chain. |
 | `get_token` | ERC-20 metadata and total supply. |
 | `get_pool` | V3 pool state for a pair + fee tier: address, price, tick, liquidity. |
 | `quote` | Best swap route and amounts between two tokens (exact-in or exact-out). |
 | `list_positions` | V3 liquidity positions for an address: range, amounts, uncollected fees. |
 | `get_tips` | FuelVault balances for a token: your spendable credits and creator earnings (liquid/vested). |
 | `get_vesting` | Creator vesting schedule for a launched Fire token. |
+| `token_status` | Your full stake in a token — balance, tip credits, creator earnings, liquidity, and vesting — with `isCreator` and `isDisposable` flags. |
 
 ### Writes
 
@@ -98,6 +104,7 @@ Reads are validated against live testnet. Writes are validated with real testnet
 
 - The wallet key signs real transactions. Fund a dedicated key and start on testnet.
 - Swaps, liquidity, and launches move real value. Review each tool's inputs before running against mainnet.
+- `swap`, `add_liquidity`, and `deposit_credits` operate only on launchpad, bluechip, or verified tokens (per the Kumbaya token directory), plus a token launched in the same session. Unrecognized tokens are rejected.
 
 ## License
 
