@@ -79,6 +79,7 @@ export interface ToolDef {
   pathParams: string[];
   queryParams: string[];
   bodyProps: string[];
+  bodyFileProps: string[]; // multipart props with format:binary — read as files, not stringified
   bodyContentType: string | null; // application/json | multipart/form-data | application/x-www-form-urlencoded
   inputSchema: Record<string, any>;
 }
@@ -144,6 +145,7 @@ export function buildTools(opts: BuildOptions = {}): ToolDef[] {
         const pathParams: string[] = [];
         const queryParams: string[] = [];
         const bodyProps: string[] = [];
+        const bodyFileProps: string[] = [];
 
         for (const p of op.parameters || []) {
           const s = deref(spec, p.schema) || { type: "string" };
@@ -165,11 +167,21 @@ export function buildTools(opts: BuildOptions = {}): ToolDef[] {
           for (const [k, v] of Object.entries<any>(bodySchema.properties)) {
             const ps = deref(spec, v);
             properties[k] = ps?.format === "binary"
-              ? { type: "string", description: `${ps.description || k} (file path or URL; optional)` }
+              ? { type: "string", description: `${ps.description || k} (local file path or http(s) URL)` }
               : ps;
             bodyProps.push(k);
+            if (ps?.format === "binary") bodyFileProps.push(k);
           }
           for (const r of bodySchema.required || []) if (!required.includes(r)) required.push(r);
+        } else if (bodyContentType?.includes("octet-stream") || bodySchema?.format === "binary") {
+          // Raw binary body (application/octet-stream): the whole request body IS the
+          // file (image/badge/claim/profile uploads). Expose one "file" param; the
+          // client streams the bytes as the raw body instead of JSON-encoding it.
+          bodyContentType = "application/octet-stream";
+          properties["file"] = { type: "string", description: "Local file path or http(s) URL to upload as the raw request body" };
+          bodyProps.push("file");
+          bodyFileProps.push("file");
+          if (!required.includes("file")) required.push("file");
         }
 
         const auth = svc.authOf(path, method, op);
@@ -188,6 +200,7 @@ export function buildTools(opts: BuildOptions = {}): ToolDef[] {
           pathParams,
           queryParams,
           bodyProps,
+          bodyFileProps,
           bodyContentType,
           inputSchema: { type: "object", properties, required },
         });

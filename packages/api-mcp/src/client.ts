@@ -1,5 +1,35 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { basename } from "node:path";
 import type { ToolDef } from "./spec.js";
+
+const FILE_MIME: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  webp: "image/webp", mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+};
+const mimeFor = (name: string): string =>
+  FILE_MIME[name.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream";
+
+// Resolve a multipart binary field (format:binary) whose value is a local file
+// path or an http(s) URL into an uploadable Blob. Returns null if it is neither
+// (then the caller sends it as a plain string field, preserving prior behavior).
+async function loadFilePart(v: string): Promise<{ blob: Blob; filename: string } | null> {
+  if (/^https?:\/\//i.test(v)) {
+    try {
+      const res = await fetch(v);
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      const filename = basename(new URL(v).pathname) || "upload";
+      return { blob: new Blob([buf], { type: res.headers.get("content-type") || mimeFor(filename) }), filename };
+    } catch {
+      return null;
+    }
+  }
+  if (existsSync(v)) {
+    const filename = basename(v);
+    return { blob: new Blob([readFileSync(v)], { type: mimeFor(filename) }), filename };
+  }
+  return null;
+}
 
 export interface ClientConfig {
   apiKey?: string; // exchange partner key -> x-api-key
@@ -136,13 +166,31 @@ export async function callEndpoint(
   const jwt = resolveJwt(cfg);
   if (jwt) headers["authorization"] = `Bearer ${jwt}`;
 
-  let body: string | FormData | undefined;
+  let body: BodyInit | undefined;
   if (tool.bodyProps.length > 0) {
     const b: Record<string, any> = {};
     for (const k of tool.bodyProps) if (args[k] !== undefined) b[k] = args[k];
-    if (tool.bodyContentType === "multipart/form-data") {
+    if (tool.bodyContentType === "application/octet-stream") {
+      const v = b["file"];
+      if (typeof v === "string" && v) {
+        const part = await loadFilePart(v);
+        if (part) {
+          body = part.blob;
+          headers["content-type"] = part.blob.type || "application/octet-stream";
+        } else {
+          throw new Error(`file not found or unreadable: ${v}`);
+        }
+      }
+    } else if (tool.bodyContentType === "multipart/form-data") {
+      const fileProps = new Set(tool.bodyFileProps ?? []);
       const fd = new FormData();
-      for (const [k, v] of Object.entries(b)) fd.append(k, String(v));
+      for (const [k, v] of Object.entries(b)) {
+        if (fileProps.has(k) && typeof v === "string" && v) {
+          const part = await loadFilePart(v);
+          if (part) { fd.append(k, part.blob, part.filename); continue; }
+        }
+        fd.append(k, String(v));
+      }
       body = fd;
     } else if (tool.bodyContentType === "application/x-www-form-urlencoded") {
       body = new URLSearchParams(b as Record<string, string>).toString();
