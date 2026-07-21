@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { parseUnits, formatUnits, erc20Abi, getAddress } from "viem";
 import { publicClient, walletClient, requireAccount } from "../clients.js";
 import { DEFAULT_CHAIN_ID, getChain, type ChainId } from "../config/chains.js";
@@ -77,6 +78,43 @@ export const walletTools: ToolDef[] = [
       } as Parameters<ReturnType<typeof walletClient>["signTypedData"]>[0];
       const signature = await walletClient(chainId).signTypedData(signArgs);
       return { primaryType: td.primaryType, signature };
+    },
+  },
+  {
+    name: "sign_token_claim",
+    description:
+      "Sign the EIP-712 ClaimListing proof to claim an unclaimed token listing on Kumbaya (proves you are the on-chain creator so off-chain metadata can be attached; moves no funds). Returns { mintAddress, chainId, signature, signedAt, nonce } to pass straight to the kumbaya-mcp app_post_tokens_by_mint_address_claim tool along with your description and category. Sign and claim within the hour (the signature expires). Use this instead of hand-building the typed data.",
+    schema: {
+      mintAddress: z.string().min(1).describe("The token (mint) address to claim, e.g. the `token` returned by ignite."),
+      chainId: chainArg,
+    },
+    handler: async (args) => {
+      const chainId = (args.chainId ?? DEFAULT_CHAIN_ID) as ChainId;
+      const mintAddress = getAddress(String(args.mintAddress));
+      const timestamp = Math.floor(Date.now() / 1000);
+      const nonce = randomUUID();
+      const td = {
+        domain: { name: "Kumbaya Token Claim", version: "1", chainId },
+        types: {
+          ClaimListing: [
+            { name: "mintAddress", type: "address" },
+            { name: "chainId", type: "uint256" },
+            { name: "timestamp", type: "uint256" },
+            { name: "nonce", type: "string" },
+          ],
+        },
+        primaryType: "ClaimListing",
+        message: { mintAddress, chainId, timestamp, nonce },
+      };
+      const signArgs = {
+        account: requireAccount(),
+        domain: td.domain,
+        types: td.types,
+        primaryType: td.primaryType,
+        message: coerceTypedMessage(td as never),
+      } as Parameters<ReturnType<typeof walletClient>["signTypedData"]>[0];
+      const signature = await walletClient(chainId).signTypedData(signArgs);
+      return { mintAddress, chainId, signature, signedAt: timestamp, nonce };
     },
   },
   {

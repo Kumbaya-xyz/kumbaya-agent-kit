@@ -38,12 +38,16 @@ function checkPolicy(policy: Policy | undefined, tx: Record<string, unknown>): s
   return null;
 }
 
-// Default-on: typed-data signing is only ever used for FuelVault gifting (swaps use
-// on-chain approve, SIWE uses sign/message). So with no explicit policy we allow ONLY
-// the FuelVault GiftPermit and reject everything else — which blocks the real risk, an
-// arbitrary Permit2/EIP-2612 drain permit. Matched on domain name+version, so it's
-// address/redeploy-agnostic. An explicit allowTypedData in the keystore overrides this.
-const DEFAULT_TYPED_DATA_ALLOWLIST: TypedDataRule[] = [{ primaryType: "GiftPermit", name: "FuelVault", version: "1" }];
+// Default-on: typed-data signing is used for FuelVault gifting (swaps use on-chain
+// approve, SIWE uses sign/message) and for claiming a token listing (proving on-chain
+// creator ownership to attach off-chain metadata; moves no funds). So with no explicit
+// policy we allow ONLY those two and reject everything else, which blocks the real
+// risk, an arbitrary Permit2/EIP-2612 drain permit. Matched on domain name+version, so
+// it's address/redeploy-agnostic. An explicit allowTypedData in the keystore overrides.
+const DEFAULT_TYPED_DATA_ALLOWLIST: TypedDataRule[] = [
+  { primaryType: "GiftPermit", name: "FuelVault", version: "1" },
+  { primaryType: "ClaimListing", name: "Kumbaya Token Claim", version: "1" },
+];
 
 /** Gate /v1/sign/typed-data. A signed permit authorizes a token move, so the request
  *  must match one allowlist rule (every set field). Falls back to the FuelVault
