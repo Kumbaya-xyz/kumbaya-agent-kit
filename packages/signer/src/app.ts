@@ -72,6 +72,18 @@ function checkTypedDataPolicy(policy: Policy | undefined, td: Record<string, unk
   return matched ? null : `typed-data not allowlisted (primaryType=${primaryType || "?"}, domain=${name || "?"}/${version || "?"})`;
 }
 
+function shortAddr(a?: unknown): string {
+  const s = typeof a === "string" ? a : "";
+  return s.length >= 10 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s || "?";
+}
+
+/** One console line per signing request so a relayed tx can be traced to the agent
+ *  it came from. stderr only (no persistence); Railway captures it in the log stream. */
+function logSign(kind: string, entry: AgentEntry | null, detail: string, outcome: string): void {
+  const who = entry ? `agent=${entry.label ?? shortAddr(entry.account.address)} addr=${shortAddr(entry.account.address)}` : "agent=UNAUTHORIZED";
+  console.error(`[signer] ${kind} ${who}${detail ? " " + detail : ""} -> ${outcome}`);
+}
+
 export function createApp(keystore = loadKeystore()) {
   const app = new Hono();
 
@@ -91,31 +103,37 @@ export function createApp(keystore = loadKeystore()) {
 
   app.post("/v1/sign/transaction", async (c) => {
     const entry = auth(c);
-    if (!entry) return c.json({ error: "unauthorized" }, 401);
+    if (!entry) return (logSign("sign/transaction", null, "", "401 unauthorized"), c.json({ error: "unauthorized" }, 401));
     const { transaction } = (await c.req.json()) as { transaction: Record<string, unknown> };
     const tx = reviveTx(transaction);
+    const detail = `to=${shortAddr(tx.to)} chainId=${tx.chainId ?? "?"} value=${tx.value ?? 0} nonce=${tx.nonce ?? "?"}`;
     const denied = checkPolicy(entry.policy, tx);
-    if (denied) return c.json({ error: `policy: ${denied}` }, 403);
-    if (!entry.account.signTransaction) return c.json({ error: "account cannot sign transactions" }, 500);
+    if (denied) return (logSign("sign/transaction", entry, detail, `DENIED policy: ${denied}`), c.json({ error: `policy: ${denied}` }, 403));
+    if (!entry.account.signTransaction) return (logSign("sign/transaction", entry, detail, "500 cannot sign"), c.json({ error: "account cannot sign transactions" }, 500));
     const signedTransaction = await entry.account.signTransaction(tx as never);
+    logSign("sign/transaction", entry, detail, "signed");
     return c.json({ signedTransaction });
   });
 
   app.post("/v1/sign/typed-data", async (c) => {
     const entry = auth(c);
-    if (!entry) return c.json({ error: "unauthorized" }, 401);
+    if (!entry) return (logSign("sign/typed-data", null, "", "401 unauthorized"), c.json({ error: "unauthorized" }, 401));
     const { typedData } = (await c.req.json()) as { typedData: Record<string, unknown> };
+    const domain = (typedData.domain ?? {}) as Record<string, unknown>;
+    const detail = `primaryType=${typedData.primaryType ?? "?"} domain=${domain.name ?? "?"}`;
     const denied = checkTypedDataPolicy(entry.policy, typedData);
-    if (denied) return c.json({ error: `policy: ${denied}` }, 403);
+    if (denied) return (logSign("sign/typed-data", entry, detail, `DENIED policy: ${denied}`), c.json({ error: `policy: ${denied}` }, 403));
     const signature = await entry.account.signTypedData!(coerceTypedData(typedData as never) as never);
+    logSign("sign/typed-data", entry, detail, "signed");
     return c.json({ signature });
   });
 
   app.post("/v1/sign/message", async (c) => {
     const entry = auth(c);
-    if (!entry) return c.json({ error: "unauthorized" }, 401);
+    if (!entry) return (logSign("sign/message", null, "", "401 unauthorized"), c.json({ error: "unauthorized" }, 401));
     const { message } = (await c.req.json()) as { message: string | { raw: string } };
     const signature = await entry.account.signMessage!({ message: message as never });
+    logSign("sign/message", entry, "", "signed");
     return c.json({ signature });
   });
 
