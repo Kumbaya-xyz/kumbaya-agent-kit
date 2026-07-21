@@ -20,7 +20,9 @@ for (const [name, base] of SPECS) {
     process.exit(1);
   }
   const spec = await res.json();
-  writeFileSync(join(dir, `${name}.json`), JSON.stringify(spec, null, 2) + "\n");
+  // Minified single-line: these specs are generated artifacts, not hand-edited, and
+  // compact keeps the repo/package small.
+  writeFileSync(join(dir, `${name}.json`), JSON.stringify(spec));
   const ops = Object.values(spec.paths).reduce(
     (n, m) => n + Object.keys(m).filter((k) => !k.startsWith("x-")).length,
     0
