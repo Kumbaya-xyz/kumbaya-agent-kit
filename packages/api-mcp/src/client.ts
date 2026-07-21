@@ -51,6 +51,67 @@ function retryAfterSeconds(res: Response, data: unknown): number | null {
   return null;
 }
 
+// A video comment returns 202 { status: "processing", nonce } and finishes in the
+// background (uploads to X, then creates the comment; if X fails the comment is never
+// created). We mirror the website (kumbaya-frontend pollSubmission.ts): poll the
+// submission endpoint until done/failed, so the tool returns the real outcome instead
+// of a bare "processing" the caller would misread as success. Bounded so it can't hang.
+const SUBMISSION_POLL_MAX_MS = Number(process.env.KUMBAYA_SUBMISSION_POLL_MAX_MS) || 120_000;
+const SUBMISSION_POLL_INTERVAL_MS = Number(process.env.KUMBAYA_SUBMISSION_POLL_INTERVAL_MS) || 8_000;
+
+function processingNonce(data: unknown): string | null {
+  if (data && typeof data === "object" && "status" in data && "nonce" in data) {
+    const { status, nonce } = data as { status?: unknown; nonce?: unknown };
+    if (status === "processing" && typeof nonce === "string" && nonce) return nonce;
+  }
+  return null;
+}
+
+async function pollSubmission(
+  baseUrl: string,
+  nonce: string,
+  headers: Record<string, string>
+): Promise<CallResult> {
+  const url = baseUrl.replace(/\/+$/, "") + `/v1/comments/submission/${encodeURIComponent(nonce)}`;
+  const deadline = Date.now() + SUBMISSION_POLL_MAX_MS;
+  while (Date.now() < deadline) {
+    await sleep(SUBMISSION_POLL_INTERVAL_MS);
+    let status: number;
+    let body: unknown;
+    try {
+      const res = await fetch(url, { method: "GET", headers });
+      status = res.status;
+      const text = await res.text();
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text;
+      }
+    } catch {
+      continue; // transient network error; keep polling until the deadline
+    }
+    if (status === 404 || status >= 500) continue; // not recorded yet / transient; keep polling
+    const s = body && typeof body === "object" ? (body as { status?: unknown }).status : undefined;
+    if (s === "done") {
+      const comment = (body as { comment?: unknown }).comment;
+      return { status: 201, ok: true, data: comment ?? body };
+    }
+    if (s === "failed") {
+      return { status: 502, ok: false, data: body };
+    }
+    // "processing" -> keep polling
+  }
+  return {
+    status: 202,
+    ok: false,
+    data: {
+      status: "timeout",
+      nonce,
+      error: `video comment still processing after ${Math.round(SUBMISSION_POLL_MAX_MS / 1000)}s; not confirmed`,
+    },
+  };
+}
+
 export async function callEndpoint(
   cfg: ClientConfig,
   tool: ToolDef,
@@ -111,6 +172,10 @@ export async function callEndpoint(
       await sleep(wait * 1000);
       ({ res, data } = await doFetch());
     }
+  }
+  if (res.status === 202) {
+    const nonce = processingNonce(data);
+    if (nonce) return pollSubmission(tool.baseUrl, nonce, headers);
   }
   return { status: res.status, ok: res.ok, data };
 }
