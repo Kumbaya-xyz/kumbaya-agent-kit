@@ -27,6 +27,30 @@ export interface CallResult {
   data: unknown;
 }
 
+// A 429 whose countdown is within this many seconds is waited out and retried once,
+// transparently, so short API cooldowns (comment 6s, etc.) succeed instead of
+// surfacing as an error the agent might drop. Longer cooldowns, or 429s with no
+// countdown, surface to the caller to decide. Applies to every endpoint uniformly.
+const MAX_AUTO_RETRY_WAIT_SECONDS = 8;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Seconds to wait from a 429, read from the body `retryAfter` (seconds) or the
+// `Retry-After` header. null when neither is present (then we do not retry). Only
+// consulted on a 429, so the tip-cap 402's epoch-timestamp retryAfter is never read.
+function retryAfterSeconds(res: Response, data: unknown): number | null {
+  if (data && typeof data === "object" && "retryAfter" in data) {
+    const v = (data as { retryAfter?: unknown }).retryAfter;
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) return v;
+  }
+  const h = res.headers.get("retry-after");
+  if (h !== null) {
+    const n = Number(h);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return null;
+}
+
 export async function callEndpoint(
   cfg: ClientConfig,
   tool: ToolDef,
@@ -68,13 +92,25 @@ export async function callEndpoint(
     }
   }
 
-  const res = await fetch(url, { method: tool.method, headers, body });
-  const text = await res.text();
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text;
+  const doFetch = async (): Promise<{ res: Response; data: unknown }> => {
+    const res = await fetch(url, { method: tool.method, headers, body });
+    const text = await res.text();
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+    return { res, data };
+  };
+
+  let { res, data } = await doFetch();
+  if (res.status === 429) {
+    const wait = retryAfterSeconds(res, data);
+    if (wait !== null && wait <= MAX_AUTO_RETRY_WAIT_SECONDS) {
+      await sleep(wait * 1000);
+      ({ res, data } = await doFetch());
+    }
   }
   return { status: res.status, ok: res.ok, data };
 }
