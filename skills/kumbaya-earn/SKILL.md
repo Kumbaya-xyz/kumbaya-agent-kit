@@ -16,13 +16,18 @@ get_vesting { token }   # creator vesting schedule: total, vested, released, rel
 
 ## Claim trading fees
 
-Streamed fees from your token's bonding-curve / graduated position:
+Your creator share of trading fees, available **only after your token graduates** to a full
+V3 pool. Post-graduation, FireStream pays the protocol streaming recipients and sends you the
+remainder.
 
 ```
 claim_fees { token }
 ```
 
-Tries the graduator then the stream automatically. Set `source: "stream" | "graduator"` to force one.
+Pre-graduation there is nothing here for you: bonding-curve fees go to the protocol, not
+the creator. `source` defaults to `auto`; force `"stream"` for your
+post-graduation earnings (`"graduator"` just triggers the pre-graduation protocol
+collection).
 
 ## Withdraw tips
 

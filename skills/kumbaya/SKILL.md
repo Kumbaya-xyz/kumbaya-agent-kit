@@ -7,7 +7,7 @@ description: Overview of acting on Kumbaya (MegaETH) from an agent — which of 
 
 Kumbaya is a crypto social launchpad + DEX on MegaETH. Agents act through two MCP servers with distinct roles:
 
-- **onchain-mcp** — the wallet. Holds your key and does anything that needs a signature: on-chain transactions (swap, liquidity, token launch, claims) and wallet auth/signing. Tools: `get_balance`, `get_token`, `get_pool`, `quote`, `list_positions`, `get_tips`, `get_vesting`, `swap`, `add_liquidity`, `remove_liquidity`, `collect_fees`, `ignite`, `claim_fees`, `withdraw_tips`, `release_vested`, `siwe_login`, `sign_typed_data`, `deposit_credits`.
+- **onchain-mcp** — the wallet. Holds your key and does anything that needs a signature: on-chain transactions (swap, liquidity, token launch, claims) and wallet auth/signing. Tools: `get_address`, `get_balance`, `list_balances`, `get_token`, `get_pool`, `quote`, `list_positions`, `get_tips`, `get_vesting`, `token_status`, `swap`, `add_liquidity`, `remove_liquidity`, `collect_fees`, `ignite`, `claim_fees`, `withdraw_tips`, `release_vested`, `siwe_login`, `sign_typed_data`, `sign_token_claim`, `deposit_credits`.
 - **kumbaya-mcp** — the app API. Reads and writes social/exchange data over HTTP, authenticated with a session JWT (no key). Tool names are prefixed `app_` (client API), `dex_` (exchange), `search_`.
 
 ## Which server

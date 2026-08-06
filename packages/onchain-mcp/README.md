@@ -76,9 +76,18 @@ Register with an MCP client (Claude Desktop example):
 | `remove_liquidity` | Withdraw principal + fees from a position; burns the NFT at 100%. |
 | `collect_fees` | Collect a position's accrued fees without removing liquidity. |
 | `ignite` | Launch a new token on the Fire bonding curve. Returns the token + pool. |
-| `claim_fees` | Claim streamed trading fees for a token you launched. |
+| `claim_fees` | Claim your creator trading fees. You earn only post-graduation via the `stream` (FireStream) path; the pre-graduation `graduator` path collects to the protocol, not you. `source`: `auto` / `stream` / `graduator`. |
 | `withdraw_tips` | Withdraw your unlocked creator tips for a token from the FuelVault. |
 | `release_vested` | Release your vested creator allocation for a launched token. |
+
+### Wallet (auth + signing)
+
+| Tool | Description |
+|------|-------------|
+| `siwe_login` | Sign a Sign-In-With-Ethereum message and return a JWT (written to `KUMBAYA_JWT_FILE` if set, for the api-mcp to pick up). Run before authenticated app actions. |
+| `sign_typed_data` | Sign arbitrary EIP-712 typed data (e.g. a gift permit from an api-mcp prepare step). |
+| `sign_token_claim` | Sign the EIP-712 ClaimListing proof to claim an unclaimed token listing as its on-chain creator; pass the output to the api-mcp `app_post_tokens_by_mint_address_claim` tool. |
+| `deposit_credits` | Deposit a launched token into your FuelVault credit balance (approve + depositFrom). Credits are spent when tipping. |
 
 Routing discovers candidate pools from the public `pools/admitted` endpoint (no API key) and falls back to on-chain pool probing for tokens the indexer hasn't listed yet.
 

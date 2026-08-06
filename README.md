@@ -30,7 +30,7 @@ onchain-mcp:
 
 - **Reads:** `get_balance`, `get_token`, `get_pool`, `quote`, `list_positions`, `get_tips`, `get_vesting`
 - **Writes:** `swap`, `add_liquidity`, `remove_liquidity`, `collect_fees`, `ignite`, `claim_fees`, `withdraw_tips`, `release_vested`
-- **Wallet:** `siwe_login`, `sign_typed_data`, `deposit_credits`
+- **Wallet:** `siwe_login`, `sign_typed_data`, `sign_token_claim`, `deposit_credits`
 
 api-mcp exposes the Kumbaya exchange, search, and client (launchpad/social) APIs as tools, auto-generated from their OpenAPI specs and authenticated with a session JWT.
 

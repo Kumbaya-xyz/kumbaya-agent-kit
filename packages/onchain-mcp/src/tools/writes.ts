@@ -585,7 +585,7 @@ export const writeTools: ToolDef[] = [
   {
     name: "claim_fees",
     description:
-      "Claim streamed trading fees for a token you launched (Fire). Tries the post-graduation graduator then the pre-graduation stream (or set source explicitly). Real transaction.",
+      "Claim trading fees for a token you launched (Fire). You earn as the creator only POST-graduation: FireStream (source='stream') pays the protocol streaming recipients and sends you the remainder. PRE-graduation, FireGraduator (source='graduator') collects bonding-curve fees to the protocol, NOT to you. Default 'auto' tries the graduator then the stream. Real transaction.",
     schema: {
       token: z.string().describe("The launched token address to claim fees for."),
       source: z.enum(["auto", "stream", "graduator"]).optional().describe("Where to claim from (default auto)."),
