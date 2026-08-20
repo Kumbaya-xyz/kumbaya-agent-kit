@@ -13,7 +13,7 @@ const addrA = privateKeyToAccount(keyA).address;
 function app() {
   process.env.SIGNER_KEYS = JSON.stringify({
     "tok-A": keyA,
-    "tok-B": { key: keyB, label: "B", policy: { allowChains: [6343], maxValueWei: "1000000000000000", allowTo: ["0x0000000000000000000000000000000000000001"] } },
+    "tok-B": { key: keyB, label: "B", policy: { allowChains: [6343], maxValueWei: "1000000000000000", allowTo: ["0x0000000000000000000000000000000000000001"], allowApproveSpenders: ["0x00000000000000000000000000000000000000e5"] } },
     "tok-C": { key: keyA, label: "C", policy: { allowTypedData: [{ primaryType: "Permit", verifyingContract: "0x000000000022d473030f116ddee9f6b43ac78ba3", spenderField: "spender", allowSpenders: ["0x0000000000000000000000000000000000000abc"] }] } },
   });
   return createApp();
@@ -50,6 +50,39 @@ test("policy denies a disallowed recipient", async () => {
   const tx = { to: "0x00000000000000000000000000000000000000ff", value: "0x0", nonce: 0, gas: "0x5208", maxFeePerGas: "0x3b9aca00", maxPriorityFeePerGas: "0x3b9aca00", chainId: 6343, type: "eip1559" };
   const res = await req(app(), "/v1/sign/transaction", { method: "POST", headers: { authorization: "Bearer tok-B", "content-type": "application/json" }, body: JSON.stringify({ transaction: tx }) });
   assert.equal(res.status, 403, "recipient not allowlisted");
+});
+
+const APPROVE_E5 = "0x095ea7b3" + "0".repeat(24) + "00000000000000000000000000000000000000e5" + "f".repeat(64);
+const approveTx = (over: Record<string, unknown> = {}) => ({ to: "0x00000000000000000000000000000000000000ff", value: "0x0", data: APPROVE_E5, nonce: 0, gas: "0xf000", maxFeePerGas: "0x3b9aca00", maxPriorityFeePerGas: "0x3b9aca00", chainId: 6343, type: "eip1559", ...over });
+const signTx = (a: ReturnType<typeof createApp>, tx: unknown) =>
+  req(a, "/v1/sign/transaction", { method: "POST", headers: { authorization: "Bearer tok-B", "content-type": "application/json" }, body: JSON.stringify({ transaction: tx }) });
+
+test("approve to a non-allowlisted token passes when the spender is allowlisted", async () => {
+  const res = await signTx(app(), approveTx());
+  assert.equal(res.status, 200, await res.text());
+});
+
+test("approve with a non-allowlisted spender is denied", async () => {
+  const bad = "0x095ea7b3" + "0".repeat(24) + "00000000000000000000000000000000000000bb" + "f".repeat(64);
+  const res = await signTx(app(), approveTx({ data: bad }));
+  assert.equal(res.status, 403);
+});
+
+test("approve carrying native value is denied", async () => {
+  const res = await signTx(app(), approveTx({ value: "0x1" }));
+  assert.equal(res.status, 403);
+});
+
+test("non-approve calldata to a non-allowlisted recipient stays denied", async () => {
+  const transfer = "0xa9059cbb" + "0".repeat(24) + "00000000000000000000000000000000000000e5" + "f".repeat(64);
+  const res = await signTx(app(), approveTx({ data: transfer }));
+  assert.equal(res.status, 403);
+});
+
+test("approve with dirty spender padding is denied", async () => {
+  const dirty = "0x095ea7b3" + "1" + "0".repeat(23) + "00000000000000000000000000000000000000e5" + "f".repeat(64);
+  const res = await signTx(app(), approveTx({ data: dirty }));
+  assert.equal(res.status, 403);
 });
 
 test("policy denies over-cap value", async () => {

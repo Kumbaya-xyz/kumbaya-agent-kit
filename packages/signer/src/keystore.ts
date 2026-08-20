@@ -20,6 +20,10 @@ export interface Policy {
   allowTo?: string[]; // if set, tx `to` must be in this list (lowercased)
   allowChains?: number[]; // if set, chainId must be in this list
   allowTypedData?: TypedDataRule[]; // if set, /v1/sign/typed-data must match one rule
+  // Carve-out for ERC20 approvals: a zero-value tx whose calldata is exactly
+  // approve(address,uint256) with the decoded spender in this list passes even when
+  // `to` (the token contract, dynamic for launchpad tokens) is outside allowTo.
+  allowApproveSpenders?: string[];
 }
 
 export interface AgentEntry {

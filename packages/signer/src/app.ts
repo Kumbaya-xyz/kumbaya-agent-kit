@@ -33,9 +33,25 @@ function checkPolicy(policy: Policy | undefined, tx: Record<string, unknown>): s
     return `value exceeds cap (${policy.maxValueWei})`;
   if (policy.allowTo && tx.to != null) {
     const to = String(tx.to).toLowerCase();
-    if (!policy.allowTo.map((a) => a.toLowerCase()).includes(to)) return `recipient ${tx.to} not allowlisted`;
+    if (!policy.allowTo.map((a) => a.toLowerCase()).includes(to)) {
+      if (isAllowlistedApprove(policy, tx)) return null;
+      return `recipient ${tx.to} not allowlisted`;
+    }
   }
   return null;
+}
+
+// ERC20 approve(address,uint256) to any token contract, provided the spender is
+// allowlisted and no native value moves. selector 0x095ea7b3 + two 32-byte words.
+function isAllowlistedApprove(policy: Policy, tx: Record<string, unknown>): boolean {
+  const spenders = policy.allowApproveSpenders;
+  if (!spenders?.length) return false;
+  if (tx.value != null && BigInt(tx.value as bigint) !== 0n) return false;
+  const data = typeof tx.data === "string" ? tx.data.toLowerCase() : "";
+  if (!data.startsWith("0x095ea7b3") || data.length !== 138) return false;
+  if (data.slice(10, 34) !== "0".repeat(24)) return false;
+  const spender = `0x${data.slice(34, 74)}`;
+  return spenders.map((a) => a.toLowerCase()).includes(spender);
 }
 
 // Default-on: typed-data signing is used for FuelVault gifting (swaps use on-chain
