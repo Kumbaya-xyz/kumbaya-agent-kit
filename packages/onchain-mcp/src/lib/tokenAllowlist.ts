@@ -6,6 +6,7 @@
 // A token this process just launched via ignite is allowed immediately (before it
 // is indexed) via an in-memory self-launched set.
 import { getAddress } from "viem";
+import { fetchNamed } from "./http.js";
 import { SEARCH_API_URL, getChain, type ChainId } from "../config/chains.js";
 
 const TTL_MS = 60_000;
@@ -35,7 +36,7 @@ async function isTrusted(chainId: ChainId, addr: string): Promise<boolean> {
   const url =
     `${SEARCH_API_URL}/api/v1/search/tokens` +
     `?q=${addr}&chainId=${chainId}&visibility=trusted&limit=10`;
-  const res = await fetch(url);
+  const res = await fetchNamed("search-api token lookup", url);
   if (!res.ok) throw new Error(`token search ${res.status} for ${addr}`);
   const data = (await res.json()) as { tokens?: SearchToken[] };
   // Search is fuzzy; require an exact address match among the trusted results.

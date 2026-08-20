@@ -10,6 +10,7 @@
 // only SIGNER_URL + SIGNER_TOKEN and never store the address.
 import { toAccount } from "viem/accounts";
 import { getAddress, type Account } from "viem";
+import { fetchNamed } from "./lib/http.js";
 
 const signerUrl = () => process.env.SIGNER_URL?.replace(/\/$/, "");
 const signerToken = () => process.env.SIGNER_TOKEN || "";
@@ -23,7 +24,7 @@ function jsonBig(obj: unknown): string {
 }
 
 async function post(path: string, body: unknown): Promise<Record<string, unknown>> {
-  const res = await fetch(`${signerUrl()}${path}`, {
+  const res = await fetchNamed(`signer ${path}`, `${signerUrl()}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${signerToken()}` },
     body: jsonBig(body),
@@ -35,13 +36,14 @@ async function post(path: string, body: unknown): Promise<Record<string, unknown
 
 async function fetchAddress(): Promise<string | undefined> {
   try {
-    const res = await fetch(`${signerUrl()}/v1/address`, {
+    const res = await fetchNamed("signer /v1/address", `${signerUrl()}/v1/address`, {
       headers: { authorization: `Bearer ${signerToken()}` },
     });
     if (!res.ok) return undefined;
     const data = (await res.json().catch(() => ({}))) as { address?: unknown };
     return typeof data.address === "string" ? data.address : undefined;
-  } catch {
+  } catch (e) {
+    console.error(`initWallet: ${e instanceof Error ? e.message : String(e)}`);
     return undefined;
   }
 }

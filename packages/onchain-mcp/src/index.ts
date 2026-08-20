@@ -20,7 +20,11 @@ for (const t of allTools) {
       return ok(await t.handler(args ?? {}));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      return ok({ error: msg });
+      const cause = (e as { cause?: { code?: string; message?: string } })?.cause;
+      const detail = cause?.code ?? cause?.message;
+      // No top-level "error" key: host circuit breakers (e.g. Hermes) treat that
+      // as a server outage and lock every tool for a cooldown.
+      return ok({ failed: true, reason: detail ? `${msg} (${detail})` : msg });
     }
   });
 }

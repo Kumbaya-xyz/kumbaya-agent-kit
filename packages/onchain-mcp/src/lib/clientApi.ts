@@ -2,6 +2,7 @@
 // EIP-4361 message to mint a session JWT the wallet owns. No Privy account needed.
 import { writeFileSync } from "node:fs";
 import { CLIENT_API_URL, JWT_FILE, type ChainId } from "../config/chains.js";
+import { fetchNamed } from "./http.js";
 import { walletClient, requireAccount } from "../clients.js";
 
 export interface SiweSession {
@@ -15,7 +16,7 @@ export async function siweLogin(chainId: ChainId): Promise<SiweSession & { jwtFi
   const account = requireAccount();
   const address = account.address;
 
-  const nonceRes = await fetch(`${CLIENT_API_URL}/v1/session/wallet/nonce?address=${address}`);
+  const nonceRes = await fetchNamed("client-api (SIWE nonce)", `${CLIENT_API_URL}/v1/session/wallet/nonce?address=${address}`);
   if (!nonceRes.ok) throw new Error(`SIWE nonce failed: ${nonceRes.status} ${nonceRes.statusText}`);
   const { nonce } = (await nonceRes.json()) as { nonce: string };
 
@@ -32,7 +33,7 @@ export async function siweLogin(chainId: ChainId): Promise<SiweSession & { jwtFi
 
   const signature = await walletClient(chainId).signMessage({ account, message });
 
-  const verifyRes = await fetch(`${CLIENT_API_URL}/v1/session/wallet/verify`, {
+  const verifyRes = await fetchNamed("client-api (SIWE verify)", `${CLIENT_API_URL}/v1/session/wallet/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, signature }),

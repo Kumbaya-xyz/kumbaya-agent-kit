@@ -53,12 +53,17 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
   try {
     const r = await callEndpoint(cfg, tool, (req.params.arguments as Record<string, any>) || {});
+    // A completed HTTP response is a working server; the status/data payload carries
+    // any API-level failure. isError is reserved for transport-level faults so host
+    // circuit breakers (e.g. Hermes) don't count 4xx lookups as server outages.
     return {
-      isError: !r.ok,
+      isError: false,
       content: [{ type: "text", text: JSON.stringify({ status: r.status, data: r.data }, null, 2) }],
     };
   } catch (e: any) {
-    return { isError: true, content: [{ type: "text", text: `Error: ${e?.message ?? String(e)}` }] };
+    const cause = e?.cause?.code ?? e?.cause?.message;
+    const detail = `${e?.message ?? String(e)}${cause ? ` (${cause})` : ""}`;
+    return { isError: true, content: [{ type: "text", text: `Error: ${detail}` }] };
   }
 });
 

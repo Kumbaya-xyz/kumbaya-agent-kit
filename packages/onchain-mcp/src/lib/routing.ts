@@ -6,6 +6,7 @@ import { Pool, Route, encodeRouteToPath, computePoolAddress } from "@kumbaya_xyz
 import { getAddress } from "viem";
 import { EXCHANGE_API_URL, type ChainId, getChain } from "../config/chains.js";
 import { getToken } from "./tokens.js";
+import { fetchNamed } from "./http.js";
 import { publicClient } from "../clients.js";
 import { QUOTER_V2_ABI, UNIV3_POOL_ABI } from "./abis.js";
 
@@ -71,7 +72,7 @@ export async function fetchAdmittedPools(
   tokenOut: string
 ): Promise<AdmittedPool[]> {
   const url = `${EXCHANGE_API_URL}/api/v1/pools/admitted?chainId=${chainId}&tokenIn=${tokenIn}&tokenOut=${tokenOut}`;
-  const res = await fetch(url);
+  const res = await fetchNamed("exchange-api pools/admitted", url);
   if (!res.ok) throw new Error(`pools/admitted request failed: ${res.status} ${res.statusText}`);
   const data = (await res.json()) as { pools?: AdmittedPool[] };
   return data.pools ?? [];
